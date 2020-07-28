@@ -16,7 +16,7 @@ impl GameState for State {
 
         self.run_systems();
         player_input(self, ctx);
-        let map = self.ecs.fetch::<map::TileMap>();
+        let map = self.ecs.fetch::<map::TileBuffer>();
         draw_map(&map.tiles, ctx);
 
         let positions = self.ecs.read_storage::<Position>();
@@ -73,7 +73,7 @@ fn player_input(gs: &mut State, ctx: &mut Rltk) {
 fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
     let mut positions = ecs.write_storage::<Position>();
     let mut players = ecs.write_storage::<Player>();
-    let map = ecs.fetch::<map::TileMap>();
+    let map = ecs.fetch::<map::TileBuffer>();
 
     for (_player, pos) in (&mut players, &mut positions).join() {
         pos.try_move(&map, delta_x, delta_y);
@@ -129,7 +129,7 @@ fn main() -> rltk::RltkError {
         const MAX_SIZE: i32 = 10;
 
         let mut rng = rltk::RandomNumberGenerator::new();
-        let (map, rooms) = map::new_map_rooms_and_corridors(
+        let map::TetraMap{buffer, rooms} = map::new_map_rooms_and_corridors(
             std::iter::from_fn(|| {
                 let w = rng.range(MIN_SIZE, MAX_SIZE);
                 let h = rng.range(MIN_SIZE, MAX_SIZE);
@@ -139,7 +139,7 @@ fn main() -> rltk::RltkError {
             })
             .take(MAX_ROOMS),
         );
-        gs.ecs.insert(map);
+        gs.ecs.insert(buffer);
         rng.random_slice_entry(rooms.as_slice())
             .map(|x| x.center())
     };

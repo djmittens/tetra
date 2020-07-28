@@ -11,7 +11,7 @@ pub struct Position {
 }
 
 impl Position {
-    pub fn try_move(self: &mut Position, map: &map::TileMap, delta_x: i32, delta_y: i32) {
+    pub fn try_move(self: &mut Position, map: &map::TileBuffer, delta_x: i32, delta_y: i32) {
         let destination_idx = map.xy_idx(self.x + delta_x, self.y + delta_y);
         if map.tiles[destination_idx] != map::TileType::Wall {
             self.x = min(79, max(0, self.x + delta_x));
