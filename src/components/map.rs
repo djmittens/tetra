@@ -1,6 +1,36 @@
 use crate::util::Rect;
 use std::cmp::{max, min};
 
+pub struct GameLevel {
+    pub tile_map: TileMap,
+    pub rooms: Vec<Room>,
+}
+
+impl GameLevel {
+    pub fn new(tile_map: TileMap) -> GameLevel {
+        GameLevel{tile_map, rooms: Vec::new()}
+    }
+
+    /// try and add the room to the game level, if we cant, then we return
+    /// the room that it collides with
+    pub fn try_add_room (&mut self, r: Room) -> Option<&Room> {
+        let res = self.rooms.iter().find(|x| r.intersect(x))
+        if res.is_none() {
+            GameLevel::apply_room(&r, &mut self.tile_map);
+            self.rooms.push(r);
+        }     
+        res
+    }
+
+    fn apply_room(room: &Room, map: &mut TileMap) {
+        for y in room.y1 + 1..=room.y2 {
+            for x in room.x1 + 1..=room.x2 {
+                map.set(x, y, TileType::Floor);
+            }
+        }
+    }
+}
+
 /// A TileMap is a resource that is shared by the components.
 // pub type TileMap = Vec<TileType>;
 pub struct TileMap {
@@ -43,7 +73,7 @@ where
     I: IntoIterator<Item = usize>,
 {
     // let mut map = vec![TileType::Floor; 80 * 50];
-    let  mut map = TileMap::new(80, 50, TileType::Floor);
+    let mut map = TileMap::new(80, 50, TileType::Floor);
 
     for x in 0..80 {
         map.set(x, 0, TileType::Wall);
@@ -69,37 +99,22 @@ where
     T: IntoIterator<Item = Room>,
 {
     // let mut map = vec![TileType::Wall; 80 * 50];
-    let mut map = TileMap::new(80, 50, TileType::Wall);
-    let rooms = rooms.into_iter();
-    let rooms = rooms.fold(Vec::new(), |mut acc, r| {
-        if !acc.iter().any(|x| r.intersect(x)) {
-            acc.push(r);
-        }
-        acc
+    let mut level = GameLevel::new(TileMap::new(80, 50, TileType::Wall));
+    rooms.into_iter().for_each(|r| {
+        level.try_add_room(r);
     });
 
 
-    for r in rooms.iter() {
-        apply_room_to_map(r, &mut map);
-    }
-
-    for (r, p) in rooms.iter().skip(1).zip(rooms.iter()) {
+    for (r, p) in level.rooms.iter().skip(1).zip(level.rooms.iter()) {
         let (r_x, r_y) = r.center();
         let (p_x, p_y) = p.center();
 
-        apply_horizontal_tunnel(&mut map, p_x, r_x, p_y);
-        apply_vertical_tunnel(&mut map, p_y, r_y, r_x);
+        apply_horizontal_tunnel(&mut level.tile_map, p_x, r_x, p_y);
+        apply_vertical_tunnel(&mut level.tile_map, p_y, r_y, r_x);
     }
-    (map, rooms)
+    (level.tile_map, level.rooms)
 }
 
-fn apply_room_to_map(room: &Room, map: &mut TileMap) {
-    for y in room.y1 + 1..=room.y2 {
-        for x in room.x1 + 1..=room.x2 {
-            map.set(x, y, TileType::Floor);
-        }
-    }
-}
 
 fn apply_horizontal_tunnel(map: &mut TileMap, x1: i32, x2: i32, y: i32) {
     for x in min(x1, x2)..=max(x1, x2) {
