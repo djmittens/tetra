@@ -27,8 +27,7 @@ impl Position {
     }
 }
 
-#[derive(Component)]
-pub struct LeftMover {}
-
 #[derive(Component, Debug)]
-pub struct Player {}
+pub struct Player {
+    pub revealed_tiles: Buffer2D<bool>,
+}
