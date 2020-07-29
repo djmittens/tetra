@@ -8,12 +8,15 @@ pub struct TetraMap {
 
 impl TetraMap {
     pub fn new(tile_map: TileBuffer) -> TetraMap {
-        TetraMap{buffer: tile_map, rooms: Vec::new()}
+        TetraMap {
+            buffer: tile_map,
+            rooms: Vec::new(),
+        }
     }
 
     /// try and add the room to the game level, if we cant, then we return
     /// the room that it collides with
-    pub fn try_add_room (&mut self, r: Room) -> Option<&Room> {
+    pub fn try_add_room(&mut self, r: Room) -> Option<&Room> {
         let rooms = &mut self.rooms;
         if !rooms.iter().any(|x| r.intersect(x)) {
             TetraMap::apply_room(&r, &mut self.buffer);
@@ -21,7 +24,7 @@ impl TetraMap {
             None
         } else {
             rooms.iter().find(|x| r.intersect(x))
-        }    
+        }
     }
 
     fn apply_room(room: &Room, map: &mut TileBuffer) {
@@ -33,17 +36,22 @@ impl TetraMap {
     }
 }
 
+pub type TileBuffer = Buffer2D<TileType>;
+
 /// A TileMap is a resource that is shared by the components.
 // pub type TileMap = Vec<TileType>;
-pub struct TileBuffer {
+pub struct Buffer2D<T> {
     pub height: i32,
     pub width: i32,
-    pub tiles: Vec<TileType>,
+    pub tiles: Vec<T>,
 }
 
-impl TileBuffer {
-    fn new (width: i32, height: i32, fill: TileType) -> TileBuffer {
-        TileBuffer {
+impl<T> Buffer2D<T>
+where
+    T: Clone,
+{
+    fn new(width: i32, height: i32, fill: T) -> Buffer2D<T> {
+        Buffer2D {
             width,
             height,
             tiles: vec![fill; (width * height) as usize],
@@ -54,7 +62,7 @@ impl TileBuffer {
         (y as usize * self.width as usize) + x as usize
     }
 
-    fn set(&mut self, x: i32, y: i32, tile: TileType) {
+    fn set(&mut self, x: i32, y: i32, tile: T) {
         let idx = self.xy_idx(x, y);
         self.tiles[idx] = tile;
     }
@@ -67,7 +75,6 @@ pub enum TileType {
 }
 
 pub type Room = Rect;
-
 
 /// Make a new map or something.
 pub fn new_map<I>(wall_ids: I) -> TileBuffer
@@ -83,9 +90,8 @@ where
     }
 
     for y in 0..50 {
-
-        map.set( 0, y, TileType::Wall);
-        map.set( 79, y, TileType::Wall);
+        map.set(0, y, TileType::Wall);
+        map.set(79, y, TileType::Wall);
     }
 
     wall_ids.into_iter().for_each(|idx| {
@@ -106,7 +112,6 @@ where
         level.try_add_room(r);
     });
 
-
     for (r, p) in level.rooms.iter().skip(1).zip(level.rooms.iter()) {
         let (r_x, r_y) = r.center();
         let (p_x, p_y) = p.center();
@@ -116,7 +121,6 @@ where
     }
     level
 }
-
 
 fn apply_horizontal_tunnel(map: &mut TileBuffer, x1: i32, x2: i32, y: i32) {
     for x in min(x1, x2)..=max(x1, x2) {

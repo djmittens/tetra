@@ -1,10 +1,10 @@
 use components::*;
 use rltk::{GameState, Rltk, RltkBuilder, VirtualKeyCode, RGB};
 use specs::prelude::*;
-use specs_derive::Component;
 
 mod components;
 mod util;
+mod draw;
 
 struct State {
     ecs: World,
@@ -17,10 +17,10 @@ impl GameState for State {
         self.run_systems();
         player_input(self, ctx);
         let map = self.ecs.fetch::<map::TileBuffer>();
-        draw_map(&map.tiles, ctx);
+        draw::draw_map(&map.tiles, ctx);
 
         let positions = self.ecs.read_storage::<Position>();
-        let renderables = self.ecs.read_storage::<Renderable>();
+        let renderables = self.ecs.read_storage::<draw::Renderable>();
 
         for (pos, render) in (&positions, &renderables).join() {
             ctx.set(pos.x, pos.y, render.fg, render.bg, render.glyph);
@@ -30,30 +30,11 @@ impl GameState for State {
 
 impl State {
     fn run_systems(&mut self) {
-        let mut lw = LeftWalker {};
-        lw.run_now(&self.ecs);
+        // let mut lw = LeftWalker {};
+        // lw.run_now(&self.ecs);
+        let mut vis = draw::VisibilitySystem{};
+        vis.run_now(&self.ecs);
         self.ecs.maintain();
-    }
-}
-
-#[derive(Component)]
-struct Renderable {
-    glyph: rltk::FontCharType,
-    fg: RGB,
-    bg: RGB,
-}
-
-struct LeftWalker {}
-impl<'a> System<'a> for LeftWalker {
-    type SystemData = (ReadStorage<'a, LeftMover>, WriteStorage<'a, Position>);
-
-    fn run(&mut self, (lefty, mut pos): Self::SystemData) {
-        for (_lefty, pos) in (&lefty, &mut pos).join() {
-            pos.x -= 1;
-            if pos.x < 0 {
-                pos.x = 79;
-            }
-        }
     }
 }
 
@@ -80,47 +61,15 @@ fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
     }
 }
 
-fn draw_map(map: &[map::TileType], ctx: &mut Rltk) {
-    let mut y = 0;
-    let mut x = 0;
-
-    for tile in map.iter() {
-        match tile {
-            map::TileType::Floor => {
-                ctx.set(
-                    x,
-                    y,
-                    RGB::from_f32(0.35, 0.5, 0.5),
-                    RGB::from_f32(0., 0., 0.),
-                    rltk::to_cp437('.'),
-                );
-            }
-            map::TileType::Wall => {
-                ctx.set(
-                    x,
-                    y,
-                    RGB::from_f32(0.0, 1.0, 0.0),
-                    RGB::from_f32(0., 0., 0.),
-                    rltk::to_cp437('#'),
-                );
-            }
-        }
-
-        x += 1;
-        if x > 79 {
-            x = 0;
-            y += 1;
-        }
-    }
-}
 
 fn main() -> rltk::RltkError {
     let context = RltkBuilder::simple80x50().with_title("Tetra").build()?;
     let mut gs = State { ecs: World::new() };
 
     gs.ecs.register::<Position>();
-    gs.ecs.register::<Renderable>();
-    gs.ecs.register::<LeftMover>();
+    gs.ecs.register::<draw::Renderable>();
+    // gs.ecs.register::<LeftMover>();
+    gs.ecs.register::<draw::Viewshed>();
     gs.ecs.register::<Player>();
 
     let starting_room = {
@@ -148,12 +97,13 @@ fn main() -> rltk::RltkError {
         gs.ecs
             .create_entity()
             .with::<Position>(pos.into())
-            .with(Renderable {
+            .with(draw::Renderable {
                 glyph: rltk::to_cp437('@'),
                 fg: RGB::named(rltk::YELLOW),
                 bg: RGB::named(rltk::BLACK),
             })
             .with(Player {})
+            .with(draw::Viewshed{visible_tiles: Vec::new(), range: 8})
             .build();
     });
 
