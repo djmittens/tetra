@@ -9,11 +9,6 @@ pub struct TetraMap {
 impl TetraMap {
     pub fn new(tile_map: TileBuffer) -> TetraMap {
         TetraMap {
-            revealed_tiles: Buffer2D::new(
-                tile_map.width,
-                tile_map.height,
-                false
-            ),
             buffer: tile_map,
             rooms: Vec::new(),
         }

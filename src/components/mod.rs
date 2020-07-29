@@ -1,6 +1,7 @@
 use specs::prelude::*;
 use specs_derive::Component;
 use std::cmp::{max, min};
+use std::collections::HashSet;
 
 pub mod map;
 
@@ -29,5 +30,5 @@ impl Position {
 
 #[derive(Component, Debug)]
 pub struct Player {
-    pub revealed_tiles: Buffer2D<bool>,
+    pub revealed_tiles: HashSet<usize>,
 }

@@ -1,6 +1,7 @@
 use components::*;
 use rltk::{GameState, Rltk, RltkBuilder, VirtualKeyCode, RGB};
 use specs::prelude::*;
+use std::collections::HashSet;
 
 mod components;
 mod util;
@@ -33,7 +34,9 @@ impl State {
         // let mut lw = LeftWalker {};
         // lw.run_now(&self.ecs);
         let mut vis = draw::VisibilitySystem{};
+        let mut fog = draw::FogOfWarSystem{};
         vis.run_now(&self.ecs);
+        fog.run_now(&self.ecs);
         self.ecs.maintain();
     }
 }
@@ -103,7 +106,7 @@ fn main() -> rltk::RltkError {
                 fg: RGB::named(rltk::YELLOW),
                 bg: RGB::named(rltk::BLACK),
             })
-            .with(Player {})
+            .with(Player {revealed_tiles: HashSet::new()})
             .with(draw::Viewshed{visible_tiles: Vec::new(), range: 8})
             .build();
     });
