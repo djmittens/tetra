@@ -2,6 +2,7 @@ use crate::components::{map, Player, Position};
 use rltk::{field_of_view, Algorithm2D, BaseMap, Point, Rltk, RGB};
 use specs::prelude::*;
 use specs_derive::Component;
+use std::collections::HashSet;
 
 #[derive(Component)]
 pub struct Renderable {
@@ -12,7 +13,7 @@ pub struct Renderable {
 
 #[derive(Component)]
 pub struct Viewshed {
-    pub visible_tiles: Vec<usize>,
+    pub visible_tiles: HashSet<usize>,
     pub range: i32,
     pub dirty: bool,
 }
@@ -42,14 +43,14 @@ impl<'a> System<'a> for VisibilitySystem {
         let map = &map.buffer;
 
         for (player, pos, viewshed) in (&mut players, &pos, &mut viewshed).join() {
-            if(viewshed.dirty) {
+            if viewshed.dirty {
                 VisibilitySystem::generate_viewshed(map, viewshed, pos);
                 VisibilitySystem::update_fog_of_war(viewshed, player);
                 viewshed.dirty = false;
             }
         }
         for (viewshed, pos) in (&mut viewshed, &pos).join() {
-            if(viewshed.dirty) {
+            if viewshed.dirty {
                 VisibilitySystem::generate_viewshed(map, viewshed, pos);
                 viewshed.dirty = false;
             }
@@ -78,32 +79,30 @@ pub fn draw_map(ecs: &World, ctx: &mut Rltk) {
     let players = ecs.read_storage::<Player>();
     let viewsheds = ecs.read_storage::<Viewshed>();
 
-    for (player, _viewshed) in (&players, &viewsheds).join() {
+    for (player, viewshed) in (&players, &viewsheds).join() {
         let mut x = 0;
         let mut y = 0;
         for (idx, tile) in map.buffer.tiles.iter().enumerate() {
             let _pt = Point::new(x, y);
             if player.revealed_tiles.contains(&idx) {
+                let glyph;
+                let mut fg;
                 match tile {
                     map::TileType::Floor => {
-                        ctx.set(
-                            x,
-                            y,
-                            RGB::from_f32(0.35, 0.5, 0.5),
-                            RGB::from_f32(0., 0., 0.),
-                            rltk::to_cp437('.'),
-                        );
+                        fg = RGB::from_f32(0.35, 0.5, 0.5);
+                        glyph = rltk::to_cp437('.');
                     }
                     map::TileType::Wall => {
-                        ctx.set(
-                            x,
-                            y,
-                            RGB::from_f32(0.0, 1.0, 0.0),
-                            RGB::from_f32(0., 0., 0.),
-                            rltk::to_cp437('#'),
-                        );
+                        fg = RGB::from_f32(0.0, 1.0, 0.0);
+                        glyph = rltk::to_cp437('#');
                     }
                 }
+
+                if !viewshed.visible_tiles.contains(&idx) {
+                    fg = fg.to_greyscale();
+                }
+
+                ctx.set( x, y, fg, RGB::from_f32(0., 0., 0.), glyph,);
             }
 
             x += 1;

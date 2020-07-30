@@ -71,7 +71,6 @@ fn main() -> rltk::RltkError {
 
     gs.ecs.register::<Position>();
     gs.ecs.register::<draw::Renderable>();
-    // gs.ecs.register::<LeftMover>();
     gs.ecs.register::<draw::Viewshed>();
     gs.ecs.register::<Player>();
 
@@ -107,7 +106,7 @@ fn main() -> rltk::RltkError {
                 bg: RGB::named(rltk::BLACK),
             })
             .with(Player {revealed_tiles: HashSet::new()})
-            .with(draw::Viewshed{visible_tiles: Vec::new(), range: 8, dirty: true})
+            .with(draw::Viewshed{visible_tiles: HashSet::new(), range: 8, dirty: true})
             .build();
     });
 
