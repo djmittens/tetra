@@ -14,6 +14,7 @@ pub struct Renderable {
 pub struct Viewshed {
     pub visible_tiles: Vec<usize>,
     pub range: i32,
+    pub dirty: bool,
 }
 
 impl Algorithm2D for map::TileBuffer {
@@ -31,34 +32,43 @@ impl BaseMap for map::TileBuffer {
 pub struct VisibilitySystem {}
 impl<'a> System<'a> for VisibilitySystem {
     type SystemData = (
-        WriteExpect<'a, map::TetraMap>,
+        ReadExpect<'a, map::TetraMap>,
         WriteStorage<'a, Viewshed>,
+        WriteStorage<'a, Player>,
         WriteStorage<'a, Position>,
     );
 
-    fn run(&mut self, (mut map, mut viewshed, pos): Self::SystemData) {
+    fn run(&mut self, (map, mut viewshed, mut players, pos): Self::SystemData) {
         let map = &map.buffer;
+
+        for (player, pos, viewshed) in (&mut players, &pos, &mut viewshed).join() {
+            if(viewshed.dirty) {
+                VisibilitySystem::generate_viewshed(map, viewshed, pos);
+                VisibilitySystem::update_fog_of_war(viewshed, player);
+                viewshed.dirty = false;
+            }
+        }
         for (viewshed, pos) in (&mut viewshed, &pos).join() {
-            viewshed.visible_tiles = field_of_view(Point::new(pos.x, pos.y), viewshed.range, &*map)
-                .iter()
-                .filter(|p| p.x >= 0 && p.x < map.width && p.y >= 0 && p.y < map.height)
-                .map(|p| map.xy_idx(p.x, p.y))
-                .collect();
+            if(viewshed.dirty) {
+                VisibilitySystem::generate_viewshed(map, viewshed, pos);
+                viewshed.dirty = false;
+            }
         }
     }
+
 }
 
-pub struct FogOfWarSystem {}
-impl<'a> System<'a> for FogOfWarSystem {
-    type SystemData = (
-        WriteStorage<'a, Player>,
-        ReadStorage<'a, Viewshed>,
-    );
+impl VisibilitySystem {
+    fn generate_viewshed(map: &map::TileBuffer, viewshed: &mut Viewshed, position: &Position) {
+        viewshed.visible_tiles = field_of_view(Point::new(position.x, position.y), viewshed.range, &*map)
+            .iter()
+            .filter(|p| p.x >= 0 && p.x < map.width && p.y >= 0 && p.y < map.height)
+            .map(|p| map.xy_idx(p.x, p.y))
+            .collect();
+    }
 
-    fn run(&mut self, (mut players, sheds): Self::SystemData) {
-        for (player, viewshed) in (&mut players, &sheds).join() {
-            viewshed.visible_tiles.iter().cloned().for_each(|x| {player.revealed_tiles.insert(x); });
-        }
+    fn update_fog_of_war(viewshed: &Viewshed, player: &mut Player) {
+        viewshed.visible_tiles.iter().cloned().for_each(|x| {player.revealed_tiles.insert(x); });
     }
 }
 
