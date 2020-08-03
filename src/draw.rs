@@ -22,6 +22,14 @@ impl BaseMap for map::TileBuffer {
     fn is_opaque(&self, idx: usize) -> bool {
         self.tiles[idx as usize] == map::TileType::Wall
     }
+
+    fn get_pathing_distance(&self, idx1: usize, idx2: usize) -> f32  {
+        let w = self.width as usize;
+        let p1 = Point::new(idx1 % w, idx1 / w);
+        let p2 = Point::new(idx2 % w, idx2 / w);
+        rltk::DistanceAlg::Pythagoras.distance2d(p1, p2)
+    }
+    
 }
 
 impl FogOfWarAlgorithm for VisibilitySystem {
