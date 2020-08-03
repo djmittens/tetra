@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 pub mod map;
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Position {
     pub x: i32,
     pub y: i32,
@@ -26,6 +26,21 @@ impl Position {
             self.y = min(49, max(0, self.y + delta_y));
         }
     }
+}
+
+#[derive(Component, Debug)]
+pub struct Viewshed {
+    pub visible_tiles: HashSet<usize>,
+    pub range: i32,
+    pub dirty: bool,
+}
+
+#[derive(Component, Debug)]
+pub struct Monster;
+
+#[derive(Component, Debug)]
+pub struct Name {
+    pub name : String
 }
 
 #[derive(Component, Debug)]

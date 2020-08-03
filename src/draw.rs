@@ -1,8 +1,8 @@
-use crate::components::{map, Player, Position};
+use crate::components::*;
 use rltk::{field_of_view, Algorithm2D, BaseMap, Point, Rltk, RGB};
 use specs::prelude::*;
 use specs_derive::Component;
-use std::collections::HashSet;
+use crate::systems::*;
 
 #[derive(Component)]
 pub struct Renderable {
@@ -11,12 +11,6 @@ pub struct Renderable {
     pub bg: RGB,
 }
 
-#[derive(Component)]
-pub struct Viewshed {
-    pub visible_tiles: HashSet<usize>,
-    pub range: i32,
-    pub dirty: bool,
-}
 
 impl Algorithm2D for map::TileBuffer {
     fn dimensions(&self) -> Point {
@@ -30,36 +24,7 @@ impl BaseMap for map::TileBuffer {
     }
 }
 
-pub struct VisibilitySystem {}
-impl<'a> System<'a> for VisibilitySystem {
-    type SystemData = (
-        ReadExpect<'a, map::TetraMap>,
-        WriteStorage<'a, Viewshed>,
-        WriteStorage<'a, Player>,
-        WriteStorage<'a, Position>,
-    );
-
-    fn run(&mut self, (map, mut viewshed, mut players, pos): Self::SystemData) {
-        let map = &map.buffer;
-
-        for (player, pos, viewshed) in (&mut players, &pos, &mut viewshed).join() {
-            if viewshed.dirty {
-                VisibilitySystem::generate_viewshed(map, viewshed, pos);
-                VisibilitySystem::update_fog_of_war(viewshed, player);
-                viewshed.dirty = false;
-            }
-        }
-        for (viewshed, pos) in (&mut viewshed, &pos).join() {
-            if viewshed.dirty {
-                VisibilitySystem::generate_viewshed(map, viewshed, pos);
-                viewshed.dirty = false;
-            }
-        }
-    }
-
-}
-
-impl VisibilitySystem {
+impl FogOfWarAlgorithm for VisibilitySystem {
     fn generate_viewshed(map: &map::TileBuffer, viewshed: &mut Viewshed, position: &Position) {
         viewshed.visible_tiles = field_of_view(Point::new(position.x, position.y), viewshed.range, &*map)
             .iter()

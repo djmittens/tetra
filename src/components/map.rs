@@ -77,7 +77,7 @@ pub enum TileType {
 pub type Room = Rect;
 
 /// Make a new map or something.
-pub fn new_map<I>(wall_ids: I) -> TileBuffer
+pub fn _new_map<I>(wall_ids: I) -> TileBuffer
 where
     I: IntoIterator<Item = usize>,
 {
