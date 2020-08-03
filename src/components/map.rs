@@ -27,46 +27,6 @@ impl TetraMap {
         }
     }
 
-    fn get_available_exits(&self, idx: usize) -> Vec<(usize, f32)> {
-        let mut exits: Vec<(usize, f32)> = Vec::new();
-        let x = idx as i32 % self.buffer.width;
-        let y = idx as i32 / self.buffer.width;
-        let w = self.buffer.width as usize;
-
-        if self.is_exit_valid(x - 1, y) {
-            exits.push((idx - 1, 1.0))
-        };
-        if self.is_exit_valid(x + 1, y) {
-            exits.push((idx + 1, 1.0))
-        };
-        if self.is_exit_valid(x, y - 1) {
-            exits.push((idx - w, 1.0))
-        };
-        if self.is_exit_valid(x, y + 1) {
-            exits.push((idx + w, 1.0))
-        };
-
-        if self.is_exit_valid(x - 1, y - 1) {
-            exits.push(((idx - w) - 1, 1.45))
-        };
-        if self.is_exit_valid(x + 1, y - 1) {
-            exits.push(((idx - w) + 1, 1.45))
-        };
-        if self.is_exit_valid(x - 1, y + 1) {
-            exits.push(((idx + w) - 1, 1.45))
-        };
-        if self.is_exit_valid(x + 1, y + 1) {
-            exits.push(((idx + w) + 1, 1.45))
-        };
-        exits
-    }
-
-    fn is_exit_valid(&self, x: i32, y: i32) -> bool {
-        if x < 1 || x >= self.buffer.width || y < 1 || y >= self.buffer.height {
-            return false;
-        }
-        self.buffer.contains_at(x, y, &TileType::Wall)
-    }
 
     fn apply_room(room: &Room, map: &mut TileBuffer) {
         for y in room.y1 + 1..=room.y2 {
