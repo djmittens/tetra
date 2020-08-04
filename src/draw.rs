@@ -12,29 +12,30 @@ pub struct Renderable {
     pub bg: RGB,
 }
 
-impl Algorithm2D for map::TileBuffer {
+impl Algorithm2D for map::TetraMap {
     fn dimensions(&self) -> Point {
-        Point::new(self.width, self.height)
+        Point::new(self.width(), self.height())
     }
 }
 
-impl BaseMap for map::TileBuffer {
+impl BaseMap for map::TetraMap {
     fn is_opaque(&self, idx: usize) -> bool {
-        self.tiles[idx as usize] == map::TileType::Wall
+        self.buffer.tiles[idx as usize] == map::TileType::Wall
     }
 
     fn get_pathing_distance(&self, idx1: usize, idx2: usize) -> f32 {
-        let w = self.width as usize;
+        let w = self.width() as usize;
         let p1 = Point::new(idx1 % w, idx1 / w);
         let p2 = Point::new(idx2 % w, idx2 / w);
         rltk::DistanceAlg::Pythagoras.distance2d(p1, p2)
     }
+
     fn get_available_exits(&self, idx: usize) -> SmallVec<[(usize, f32); 10]> {
         let mut exits = SmallVec::<[(usize, f32); 10]>::new();
 
-        let x = idx as i32 % self.width;
-        let y = idx as i32 / self.width;
-        let w = self.width as usize;
+        let x = idx as i32 % self.width();
+        let y = idx as i32 / self.width();
+        let w = self.width() as usize;
 
         if is_exit_valid(self, x - 1, y) {
             exits.push((idx - 1, 1.0))
@@ -65,20 +66,20 @@ impl BaseMap for map::TileBuffer {
     }
 }
 
-fn is_exit_valid(buffer: &map::TileBuffer, x: i32, y: i32) -> bool {
-    if x < 1 || x >= buffer.width || y < 1 || y >= buffer.height {
+fn is_exit_valid(map: &map::TetraMap, x: i32, y: i32) -> bool {
+    if x < 1 || x >= map.width() || y < 1 || y >= map.height() {
         return false;
     }
-    buffer.contains_at(x, y, &map::TileType::Wall)
+    !map.buffer.contains_at(x, y, &map::TileType::Wall)
 }
 
 impl FogOfWarAlgorithm for VisibilitySystem {
-    fn generate_viewshed(map: &map::TileBuffer, viewshed: &mut Viewshed, position: &Position) {
+    fn generate_viewshed(map: &map::TetraMap, viewshed: &mut Viewshed, position: &Position) {
         viewshed.visible_tiles =
             field_of_view(Point::new(position.x, position.y), viewshed.range, &*map)
                 .iter()
-                .filter(|p| p.x >= 0 && p.x < map.width && p.y >= 0 && p.y < map.height)
-                .map(|p| map.xy_idx(p.x, p.y))
+                .filter(|p| p.x >= 0 && p.x < map.width() && p.y >= 0 && p.y < map.height())
+                .map(|p| map.buffer.xy_idx(p.x, p.y))
                 .collect();
     }
 

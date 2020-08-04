@@ -4,14 +4,34 @@ use std::cmp::{max, min};
 pub struct TetraMap {
     pub buffer: TileBuffer,
     pub rooms: Vec<Room>,
+    pub nav_buffer: Buffer2D<bool>,
 }
 
 impl TetraMap {
-    pub fn new(tile_map: TileBuffer) -> TetraMap {
+    pub fn new(buffer: TileBuffer) -> TetraMap {
+        let mut nav_buffer = Buffer2D::new(buffer.width, buffer.height, false);
+        for (idx, tile) in buffer.tiles.iter().enumerate() {
+            if tile == &TileType::Wall {
+                nav_buffer.tiles[idx] = true;
+            }
+        }
         TetraMap {
-            buffer: tile_map,
+            buffer,
+            nav_buffer,
             rooms: Vec::new(),
         }
+    }
+
+    pub fn width(&self) -> i32 {
+        self.buffer.width
+    }
+
+    pub fn height(&self) -> i32 {
+        self.buffer.height
+    }
+
+    pub fn dimensions(&self) -> (i32, i32) {
+        (self.width(), self.height())
     }
 
     /// try and add the room to the game level, if we cant, then we return
@@ -19,7 +39,7 @@ impl TetraMap {
     pub fn try_add_room(&mut self, r: Room) -> Option<&Room> {
         let rooms = &mut self.rooms;
         if !rooms.iter().any(|x| r.intersect(x)) {
-            TetraMap::apply_room(&r, &mut self.buffer);
+            TetraMap::apply_room(&r, &mut self.buffer, &mut self.nav_buffer);
             rooms.push(r);
             None
         } else {
@@ -28,10 +48,11 @@ impl TetraMap {
     }
 
 
-    fn apply_room(room: &Room, map: &mut TileBuffer) {
+    fn apply_room(room: &Room, map: &mut TileBuffer, nav_map: &mut Buffer2D<bool>) {
         for y in room.y1 + 1..=room.y2 {
             for x in room.x1 + 1..=room.x2 {
                 map.set(x, y, TileType::Floor);
+                nav_map.set(x, y, false);
             }
         }
     }
