@@ -23,7 +23,7 @@ impl GameState for State {
 
         if self.runstate == RunState::Running {
             self.run_systems();
-            self.runstate = RunState::Paused ;
+            self.runstate = RunState::Paused;
         } else {
             self.runstate = player_input(self, ctx);
         }
@@ -46,7 +46,9 @@ impl State {
         // lw.run_now(&self.ecs);
         let mut vis = systems::VisibilitySystem {};
         let mut ai = systems::MonsterAi {};
+        let mut mis = systems::MapIndexingSystem {};
         vis.run_now(&self.ecs);
+        mis.run_now(&self.ecs);
         ai.run_now(&self.ecs);
         self.ecs.maintain();
     }
@@ -59,22 +61,25 @@ pub enum RunState {
 }
 
 fn player_input(gs: &mut State, ctx: &mut Rltk) -> RunState {
-    match ctx.key {
-        None => {return RunState::Paused}
-        Some(key) => match key {
-            VirtualKeyCode::Up => try_move_player(0, -1, &mut gs.ecs),
-            VirtualKeyCode::K => try_move_player(0, -1, &mut gs.ecs),
-            VirtualKeyCode::Left => try_move_player(-1, 0, &mut gs.ecs),
-            VirtualKeyCode::H => try_move_player(-1, 0, &mut gs.ecs),
-            VirtualKeyCode::Right => try_move_player(1, 0, &mut gs.ecs),
-            VirtualKeyCode::L => try_move_player(1, 0, &mut gs.ecs),
-            VirtualKeyCode::Down => try_move_player(0, 1, &mut gs.ecs),
-            VirtualKeyCode::J => try_move_player(0, 1, &mut gs.ecs),
-            _ => {return RunState::Paused}
-        },
+    use VirtualKeyCode::*;
+    let mut res = RunState::Paused;
+
+    if let Some(key) = ctx.key {
+         res = RunState::Running;
+         match key {
+            Up | K => try_move_player(0, -1, &mut gs.ecs),
+            Left | H => try_move_player(-1, 0, &mut gs.ecs),
+            Right | L => try_move_player(1, 0, &mut gs.ecs),
+            Down | J => try_move_player(0, 1, &mut gs.ecs),
+            Y => try_move_player(-1, -1, &mut gs.ecs),
+            U => try_move_player(1, -1, &mut gs.ecs),
+            N => try_move_player(1, 1, &mut gs.ecs),
+            B => try_move_player(-1, 1, &mut gs.ecs),
+            _ => res = RunState::Paused,
+        }
     }
 
-    RunState::Running
+    res
 }
 
 fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
@@ -85,19 +90,21 @@ fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
 
     let mut player_pos = ecs.write_resource::<(i32, i32)>();
 
-
     for (_player, pos, viewshed) in (&mut players, &mut positions, &mut viewsheds).join() {
         player_pos.0 = pos.x;
         player_pos.1 = pos.y;
 
-        pos.try_move(&map.buffer, delta_x, delta_y);
+        pos.try_move(&map, delta_x, delta_y);
         viewshed.dirty = true;
     }
 }
 
 fn main() -> rltk::RltkError {
     let context = RltkBuilder::simple80x50().with_title("Tetra").build()?;
-    let mut gs = State { ecs: World::new(), runstate: RunState::Running};
+    let mut gs = State {
+        ecs: World::new(),
+        runstate: RunState::Running,
+    };
 
     env_logger::init();
 
@@ -107,6 +114,8 @@ fn main() -> rltk::RltkError {
     gs.ecs.register::<Viewshed>();
     gs.ecs.register::<Monster>();
     gs.ecs.register::<Player>();
+    gs.ecs.register::<CombatStats>();
+    gs.ecs.register::<BlocksTile>();
 
     let starting_room = {
         const MAX_ROOMS: usize = 30;
@@ -124,49 +133,59 @@ fn main() -> rltk::RltkError {
             })
             .take(MAX_ROOMS),
         );
-        let res = rng
-            .random_slice_entry(map.rooms.as_slice())
-            .map(|x| x.center());
+        let res = rng.random_slice_entry(map.rooms.as_slice());
 
-        for (i, room) in map.rooms.iter().skip(1).enumerate() {
-            let (x, y) = room.center();
-            let glyph: u16;
-            let name: String;
+        for res in res {
+            for (i, room) in map.rooms.iter().enumerate() {
+                if room != res {
+                    let (x, y) = room.center();
+                    let glyph: u16;
+                    let name: String;
 
-            match rng.roll_dice(1, 2) {
-                1 => {
-                    glyph = rltk::to_cp437('g');
-                    name = format!("{} #{}", "Globlin", i);
-                },
-                _ => {
-                    glyph = rltk::to_cp437('o');
-                    name = format!("{} #{}", "Orc", i);
-                },
+                    match rng.roll_dice(1, 2) {
+                        1 => {
+                            glyph = rltk::to_cp437('g');
+                            name = format!("{} #{}", "Globlin", i);
+                        }
+                        _ => {
+                            glyph = rltk::to_cp437('o');
+                            name = format!("{} #{}", "Orc", i);
+                        }
+                    }
+
+                    gs.ecs
+                        .create_entity()
+                        .with(Viewshed {
+                            visible_tiles: HashSet::new(),
+                            range: 8,
+                            dirty: true,
+                        })
+                        .with(Position { x, y })
+                        .with(Monster {})
+                        .with(Name { name })
+                        .with(draw::Renderable {
+                            glyph,
+                            fg: RGB::named(rltk::RED),
+                            bg: RGB::named(rltk::BLACK),
+                        })
+                        .with(BlocksTile {})
+                        .with(CombatStats{
+                            max_hp: 16,
+                            hp: 16,
+                            power: 4,
+                            defense: 1,
+                        })
+                        .build();
+                }
             }
-
-            gs.ecs
-                .create_entity()
-                .with(Viewshed {
-                    visible_tiles: HashSet::new(),
-                    range: 8,
-                    dirty: true,
-                })
-                .with(Position { x, y })
-                .with(Monster {})
-                .with(Name {name})
-                .with(draw::Renderable {
-                    glyph,
-                    fg: RGB::named(rltk::RED),
-                    bg: RGB::named(rltk::BLACK),
-                })
-                .build();
         }
 
+        let res = res.map(|x| x.center());
         gs.ecs.insert(map);
         res
     };
 
-    starting_room.iter().for_each(|pos| {
+    for pos in starting_room {
         // insert the player location into the global store for some reason.
         gs.ecs.insert(pos.clone());
         gs.ecs
@@ -185,9 +204,18 @@ fn main() -> rltk::RltkError {
                 range: 8,
                 dirty: true,
             })
-            .with (Name{name: "Player".into()})
+            .with(Name {
+                name: "Player".into(),
+            })
+            .with(CombatStats{
+                max_hp: 30,
+                hp: 30,
+                power: 5,
+                defense: 2,
+            })
+            .with(BlocksTile{})
             .build();
-    });
+    }
 
     rltk::main_loop(context, gs)
 }

@@ -48,8 +48,13 @@ impl<'a> System<'a> for MonsterAi {
     ) {
         for (viewshed, name, _monster, pos) in (&mut viewshed, &name, &monster, &mut pos).join() {
             let idx = map.nav_buffer.xy_idx(player_pos.0, player_pos.1);
-            if viewshed.visible_tiles.contains(&idx) {
+
+            let distance =  rltk::DistanceAlg::Pythagoras.distance2d(rltk::Point::new(pos.x, pos.y), rltk::Point::new(player_pos.0, player_pos.1));
+            if distance < 1.5 {
                 info!("{} Shouts insults", name.name);
+            }
+
+            if viewshed.visible_tiles.contains(&idx) {
                 let path = rltk::a_star_search(
                     map.nav_buffer.xy_idx(pos.x, pos.y),
                     map.nav_buffer.xy_idx(player_pos.0, player_pos.1),
@@ -68,4 +73,20 @@ impl<'a> System<'a> for MonsterAi {
 pub trait FogOfWarAlgorithm {
     fn generate_viewshed(map: &map::TetraMap, viewshed: &mut Viewshed, position: &Position);
     fn update_fog_of_war(viewshed: &Viewshed, player: &mut Player);
+}
+
+pub struct MapIndexingSystem {}
+impl<'a> System<'a> for MapIndexingSystem {
+    type SystemData = (
+        WriteExpect<'a, map::TetraMap>,
+        ReadStorage<'a, Position>,
+        ReadStorage<'a, BlocksTile>,
+    );
+
+    fn run(&mut self, (mut map, pos, tile): Self::SystemData) {
+        map.gen_nav_buffer();
+        for (pos, _tile) in (&pos, &tile).join() {
+            map.nav_buffer.set(pos.x, pos.y, true);
+        }
+    }
 }

@@ -10,9 +10,9 @@ pub struct TetraMap {
 impl TetraMap {
     pub fn new(buffer: TileBuffer) -> TetraMap {
         let mut nav_buffer = Buffer2D::new(buffer.width, buffer.height, false);
-        for (idx, tile) in buffer.tiles.iter().enumerate() {
+        for (idx, tile) in buffer.data.iter().enumerate() {
             if tile == &TileType::Wall {
-                nav_buffer.tiles[idx] = true;
+                nav_buffer.data[idx] = true;
             }
         }
         TetraMap {
@@ -32,6 +32,16 @@ impl TetraMap {
 
     pub fn dimensions(&self) -> (i32, i32) {
         (self.width(), self.height())
+    }
+
+    pub fn gen_nav_buffer(&mut self) {
+        for (i, tile) in self.buffer.data.iter().enumerate() {
+            self.nav_buffer.data[i] = tile == &TileType::Wall;
+        }
+    }
+
+    pub fn is_blocked(&self, x: i32, y: i32) -> bool {
+        self.nav_buffer.data[self.nav_buffer.xy_idx(x, y)]
     }
 
     /// try and add the room to the game level, if we cant, then we return
@@ -65,7 +75,7 @@ pub type TileBuffer = Buffer2D<TileType>;
 pub struct Buffer2D<T> {
     pub height: i32,
     pub width: i32,
-    pub tiles: Vec<T>,
+    pub data: Vec<T>,
 }
 
 impl<T> Buffer2D<T>
@@ -76,7 +86,7 @@ where
         Buffer2D {
             width,
             height,
-            tiles: vec![fill; (width * height) as usize],
+            data: vec![fill; (width * height) as usize],
         }
     }
 
@@ -84,14 +94,14 @@ where
         (y as usize * self.width as usize) + x as usize
     }
 
-    fn set(&mut self, x: i32, y: i32, tile: T) {
+    pub fn set(&mut self, x: i32, y: i32, tile: T) {
         let idx = self.xy_idx(x, y);
-        self.tiles[idx] = tile;
+        self.data[idx] = tile;
     }
 
     pub fn contains_at(&self, x: i32, y: i32, tile: &T) -> bool {
         let idx = self.xy_idx(x, y);
-        &self.tiles[idx] == tile
+        &self.data[idx] == tile
     }
 }
 
@@ -123,7 +133,7 @@ where
 
     wall_ids.into_iter().for_each(|idx| {
         if idx != map.xy_idx(40, 25) {
-            map.tiles[idx] = TileType::Wall;
+            map.data[idx] = TileType::Wall;
         }
     });
     map
@@ -152,8 +162,8 @@ where
 fn apply_horizontal_tunnel(map: &mut TileBuffer, x1: i32, x2: i32, y: i32) {
     for x in min(x1, x2)..=max(x1, x2) {
         let idx = map.xy_idx(x, y);
-        if idx > 0 && idx < map.tiles.len() {
-            map.tiles[idx as usize] = TileType::Floor;
+        if idx > 0 && idx < map.data.len() {
+            map.data[idx as usize] = TileType::Floor;
         }
     }
 }
@@ -161,8 +171,8 @@ fn apply_horizontal_tunnel(map: &mut TileBuffer, x1: i32, x2: i32, y: i32) {
 fn apply_vertical_tunnel(map: &mut TileBuffer, y1: i32, y2: i32, x: i32) {
     for y in min(y1, y2)..=max(y1, y2) {
         let idx = map.xy_idx(x, y);
-        if idx > 0 && idx < map.tiles.len() {
-            map.tiles[idx as usize] = TileType::Floor;
+        if idx > 0 && idx < map.data.len() {
+            map.data[idx as usize] = TileType::Floor;
         }
     }
 }

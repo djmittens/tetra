@@ -11,17 +11,15 @@ pub struct Position {
     pub y: i32,
 }
 
-impl From<&(i32, i32)> for Position {
-    fn from(pos: &(i32, i32)) -> Self {
-        Position{x: pos.0, y: pos.1}
+impl From<(i32, i32)> for Position {
+    fn from(pos: (i32, i32)) -> Self {
+        Position { x: pos.0, y: pos.1 }
     }
-    
 }
 
 impl Position {
-    pub fn try_move(self: &mut Position, map: &map::TileBuffer, delta_x: i32, delta_y: i32) {
-        let destination_idx = map.xy_idx(self.x + delta_x, self.y + delta_y);
-        if map.tiles[destination_idx] != map::TileType::Wall {
+    pub fn try_move(self: &mut Position, map: &map::TetraMap, delta_x: i32, delta_y: i32) {
+        if !map.is_blocked(self.x + delta_x, self.y + delta_y) {
             self.x = min(79, max(0, self.x + delta_x));
             self.y = min(49, max(0, self.y + delta_y));
         }
@@ -40,10 +38,22 @@ pub struct Monster;
 
 #[derive(Component, Debug)]
 pub struct Name {
-    pub name : String
+    pub name: String,
 }
 
 #[derive(Component, Debug)]
 pub struct Player {
     pub revealed_tiles: HashSet<usize>,
+}
+
+#[derive(Component, Debug)]
+pub struct BlocksTile {}
+
+
+#[derive(Component, Debug)]
+pub struct CombatStats {
+    pub max_hp: i32,
+    pub hp: i32,
+    pub defense: i32,
+    pub power: i32,
 }

@@ -20,7 +20,7 @@ impl Algorithm2D for map::TetraMap {
 
 impl BaseMap for map::TetraMap {
     fn is_opaque(&self, idx: usize) -> bool {
-        self.buffer.tiles[idx as usize] == map::TileType::Wall
+        self.buffer.data[idx as usize] == map::TileType::Wall
     }
 
     fn get_pathing_distance(&self, idx1: usize, idx2: usize) -> f32 {
@@ -67,10 +67,12 @@ impl BaseMap for map::TetraMap {
 }
 
 fn is_exit_valid(map: &map::TetraMap, x: i32, y: i32) -> bool {
-    if x < 1 || x >= map.width() || y < 1 || y >= map.height() {
-        return false;
+    let map = &map.nav_buffer;
+    if x < 1 || x >= map.width || y < 1 || y >= map.height {
+        false
+    } else {
+        !map.data[map.xy_idx(x, y)]
     }
-    !map.buffer.contains_at(x, y, &map::TileType::Wall)
 }
 
 impl FogOfWarAlgorithm for VisibilitySystem {
@@ -98,7 +100,7 @@ pub fn draw_map(ecs: &World, ctx: &mut Rltk) {
     for (player, viewshed) in (&players, &viewsheds).join() {
         let mut x = 0;
         let mut y = 0;
-        for (idx, tile) in map.buffer.tiles.iter().enumerate() {
+        for (idx, tile) in map.buffer.data.iter().enumerate() {
             let _pt = Point::new(x, y);
             if player.revealed_tiles.contains(&idx) {
                 let glyph;
