@@ -1,6 +1,5 @@
 use specs::prelude::*;
 use specs_derive::Component;
-use std::cmp::{max, min};
 use std::collections::HashSet;
 
 pub mod map;
@@ -18,12 +17,6 @@ impl From<(i32, i32)> for Position {
 }
 
 impl Position {
-    pub fn try_move(self: &mut Position, map: &map::TetraMap, delta_x: i32, delta_y: i32) {
-        if !map.is_blocked(self.x + delta_x, self.y + delta_y) {
-            self.x = min(79, max(0, self.x + delta_x));
-            self.y = min(49, max(0, self.y + delta_y));
-        }
-    }
 }
 
 #[derive(Component, Debug)]

@@ -51,7 +51,8 @@ impl<'a> System<'a> for MonsterAi {
 
             let distance =  rltk::DistanceAlg::Pythagoras.distance2d(rltk::Point::new(pos.x, pos.y), rltk::Point::new(player_pos.0, player_pos.1));
             if distance < 1.5 {
-                info!("{} Shouts insults", name.name);
+                // info!("{} Shouts insults towards {}", name.name, idx);
+                // info!("{:?}\n {}", viewshed, viewshed.visible_tiles.contains(&idx));
             }
 
             if viewshed.visible_tiles.contains(&idx) {
@@ -60,6 +61,7 @@ impl<'a> System<'a> for MonsterAi {
                     map.nav_buffer.xy_idx(player_pos.0, player_pos.1),
                     &mut *map,
                 );
+                // info!("{} {:?}", path.success, path.steps);
                 if path.success && path.steps.len() > 1 {
                     pos.x = path.steps[1] as i32 % map.width();
                     pos.y = path.steps[1] as i32 / map.width();
@@ -81,12 +83,17 @@ impl<'a> System<'a> for MapIndexingSystem {
         WriteExpect<'a, map::TetraMap>,
         ReadStorage<'a, Position>,
         ReadStorage<'a, BlocksTile>,
+        Entities<'a>
     );
 
-    fn run(&mut self, (mut map, pos, tile): Self::SystemData) {
+    fn run(&mut self, (mut map, pos, tile, ent): Self::SystemData) {
         map.gen_nav_buffer();
-        for (pos, _tile) in (&pos, &tile).join() {
-            map.nav_buffer.set(pos.x, pos.y, true);
+        map.clear_entities();
+        for (pos, ent) in (&pos, &ent).join() {
+            if tile.contains(ent) {
+                map.nav_buffer.set(pos.x, pos.y, true);
+            }
+            map.entities.mutate(pos.x, pos.y, |x| x.push(ent));
         }
     }
 }

@@ -2,6 +2,7 @@ use components::*;
 use rltk::{GameState, Rltk, RltkBuilder, VirtualKeyCode, RGB};
 use specs::prelude::*;
 use std::collections::HashSet;
+use log::*;
 
 extern crate env_logger;
 extern crate log;
@@ -47,9 +48,9 @@ impl State {
         let mut vis = systems::VisibilitySystem {};
         let mut ai = systems::MonsterAi {};
         let mut mis = systems::MapIndexingSystem {};
-        vis.run_now(&self.ecs);
-        mis.run_now(&self.ecs);
         ai.run_now(&self.ecs);
+        mis.run_now(&self.ecs);
+        vis.run_now(&self.ecs);
         self.ecs.maintain();
     }
 }
@@ -85,17 +86,37 @@ fn player_input(gs: &mut State, ctx: &mut Rltk) -> RunState {
 fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
     let mut positions = ecs.write_storage::<Position>();
     let mut players = ecs.write_storage::<Player>();
-    let mut viewsheds = ecs.write_storage::<components::Viewshed>();
+    let mut viewsheds = ecs.write_storage::<Viewshed>();
+    let combat_stats = ecs.read_storage::<CombatStats>();
     let map = ecs.fetch::<map::TetraMap>();
 
     let mut player_pos = ecs.write_resource::<(i32, i32)>();
 
-    for (_player, pos, viewshed) in (&mut players, &mut positions, &mut viewsheds).join() {
-        player_pos.0 = pos.x;
-        player_pos.1 = pos.y;
+    fn clamp(m: i32, v: i32) -> i32 {
+        use std::cmp::{min, max};
+        min(m, max(0, v))
+    }
 
-        pos.try_move(&map, delta_x, delta_y);
-        viewshed.dirty = true;
+    for (_player, pos, viewshed) in (&mut players, &mut positions, &mut viewsheds).join() {
+
+        let new_x = clamp(map.width() - 1 , pos.x + delta_x);
+        let new_y = clamp(map.height() - 1, pos.y + delta_y);
+
+
+        for ent in map.entities.get(pos.x + delta_x, pos.y + delta_y) {
+            if combat_stats.contains(*ent) {
+                info!("From Hells heart i stab thee {:?}", ent);
+                return; // so we dont move after attacking, i guess thats a way to do it, i dont like it FIXME
+            }
+        }
+
+        if !map.is_blocked(new_x, new_y) {
+            pos.x = new_x;
+            pos.y = new_y;
+            player_pos.0 = new_x;
+            player_pos.1 = new_y;
+            viewshed.dirty = true;
+        }
     }
 }
 

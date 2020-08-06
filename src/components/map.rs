@@ -1,24 +1,23 @@
 use crate::util::Rect;
+use specs::prelude::*;
 use std::cmp::{max, min};
 
 pub struct TetraMap {
     pub buffer: TileBuffer,
     pub rooms: Vec<Room>,
     pub nav_buffer: Buffer2D<bool>,
+    pub entities: Buffer2D<Vec<Entity>>,
 }
 
 impl TetraMap {
     pub fn new(buffer: TileBuffer) -> TetraMap {
         let mut nav_buffer = Buffer2D::new(buffer.width, buffer.height, false);
-        for (idx, tile) in buffer.data.iter().enumerate() {
-            if tile == &TileType::Wall {
-                nav_buffer.data[idx] = true;
-            }
-        }
+        update_nav_buffer(&buffer.data, &mut nav_buffer.data);
         TetraMap {
-            buffer,
-            nav_buffer,
+            entities: Buffer2D::new(buffer.width, buffer.height, Vec::new()),
             rooms: Vec::new(),
+            nav_buffer,
+            buffer,
         }
     }
 
@@ -35,8 +34,12 @@ impl TetraMap {
     }
 
     pub fn gen_nav_buffer(&mut self) {
-        for (i, tile) in self.buffer.data.iter().enumerate() {
-            self.nav_buffer.data[i] = tile == &TileType::Wall;
+        update_nav_buffer(&self.buffer.data, &mut self.nav_buffer.data);
+    }
+
+    pub fn clear_entities(&mut self) {
+        for e in self.entities.data.iter_mut() {
+            e.clear();
         }
     }
 
@@ -57,7 +60,6 @@ impl TetraMap {
         }
     }
 
-
     fn apply_room(room: &Room, map: &mut TileBuffer, nav_map: &mut Buffer2D<bool>) {
         for y in room.y1 + 1..=room.y2 {
             for x in room.x1 + 1..=room.x2 {
@@ -65,6 +67,12 @@ impl TetraMap {
                 nav_map.set(x, y, false);
             }
         }
+    }
+}
+
+fn update_nav_buffer(tiles: &Vec<TileType>, nav: &mut Vec<bool>) {
+    for (i, tile) in tiles.iter().enumerate() {
+        nav[i] = tile == &TileType::Wall;
     }
 }
 
@@ -99,13 +107,26 @@ where
         self.data[idx] = tile;
     }
 
+    pub fn get(&self, x: i32, y: i32) -> &T {
+        let idx = self.xy_idx(x, y);
+        &self.data[idx]
+    }
+
+    pub fn mutate<F>(&mut self, x: i32, y: i32, func: F)
+    where
+        F: Fn(&mut T) -> (),
+    {
+        let idx = self.xy_idx(x, y);
+        func(&mut self.data[idx]);
+    }
+
     pub fn contains_at(&self, x: i32, y: i32, tile: &T) -> bool {
         let idx = self.xy_idx(x, y);
         &self.data[idx] == tile
     }
 }
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 pub enum TileType {
     Wall,
     Floor,
