@@ -6,6 +6,7 @@ use log::*;
 
 extern crate env_logger;
 extern crate log;
+extern crate specs;
 
 mod components;
 mod draw;
@@ -14,30 +15,55 @@ mod util;
 
 pub struct State {
     pub ecs: World,
-    pub runstate: RunState,
 }
 
 impl GameState for State {
     fn tick(&mut self, ctx: &mut Rltk) {
         ctx.cls();
-        ctx.print(1, 1, "Hello World Rust Edition");
 
-        if self.runstate == RunState::Running {
-            self.run_systems();
-            self.runstate = RunState::Paused;
-        } else {
-            self.runstate = player_input(self, ctx);
+        let mut newrunstate = *self.ecs.fetch::<RunState>();
+
+        match newrunstate {
+            RunState::PreRun => {
+                self.run_systems();
+                newrunstate = RunState::AwaitingInput;
+            }
+            RunState::AwaitingInput => {
+                newrunstate = player_input(self, ctx);
+            }
+            RunState::PlayerTurn => {
+                self.run_systems();
+                newrunstate = RunState::MonsterTurn;
+            }
+            RunState::MonsterTurn => {
+                self.run_systems();
+                newrunstate = RunState::AwaitingInput;
+            }
+
         }
+
+        {
+            let mut runwriter = self.ecs.write_resource::<RunState>();
+            *runwriter = newrunstate;
+        }
+
+        delete_the_dead(&mut self.ecs);
 
         // let map = self.ecs.fetch::<map::TetraMap>();
         draw::draw_map(&self.ecs, ctx);
 
-        let positions = self.ecs.read_storage::<Position>();
-        let renderables = self.ecs.read_storage::<draw::Renderable>();
+        // Draw other renderable bs.
+        {
+            let positions = self.ecs.read_storage::<Position>();
+            let renderables = self.ecs.read_storage::<draw::Renderable>();
+            //TODO only draw when inside of the players viewshed.
 
-        for (pos, render) in (&positions, &renderables).join() {
-            ctx.set(pos.x, pos.y, render.fg, render.bg, render.glyph);
+            for (pos, render) in (&positions, &renderables).join() {
+                ctx.set(pos.x, pos.y, render.fg, render.bg, render.glyph);
+            }
         }
+
+        ctx.print(1, 1, "Tetra Beta v0.0.1");
     }
 }
 
@@ -46,10 +72,14 @@ impl State {
         // let mut lw = LeftWalker {};
         // lw.run_now(&self.ecs);
         let mut vis = systems::VisibilitySystem {};
+        let mut melee = systems::MeleeCombatSystem {};
+        let mut damage = systems::DamageSystem {};
         let mut ai = systems::MonsterAi {};
         let mut mis = systems::MapIndexingSystem {};
-        ai.run_now(&self.ecs);
         mis.run_now(&self.ecs);
+        ai.run_now(&self.ecs);
+        melee.run_now(&self.ecs);
+        damage.run_now(&self.ecs);
         vis.run_now(&self.ecs);
         self.ecs.maintain();
     }
@@ -57,16 +87,42 @@ impl State {
 
 #[derive(PartialEq, Copy, Clone)]
 pub enum RunState {
-    Paused,
-    Running,
+    // Paused,
+    // Running,
+    AwaitingInput,
+    PreRun,
+    PlayerTurn,
+    MonsterTurn,
+}
+
+fn delete_the_dead(ecs: &mut World) {
+    let mut dead: Vec<Entity> = Vec::new();
+    {
+        let combat_stats = ecs.read_storage::<CombatStats>();
+        let entities = ecs.entities();
+        let players = ecs.read_storage::<Player>();
+        for (entity, stats) in (&entities, &combat_stats).join() {
+            if stats.hp < 1 {
+                if let Some(_) = players.get(entity) {
+                    info!("You are dead");
+                } else {
+                    dead.push(entity);
+                }
+            }
+        }
+    }
+
+    for victim in dead {
+        ecs.delete_entity(victim).expect("Unable to delete");
+    }
 }
 
 fn player_input(gs: &mut State, ctx: &mut Rltk) -> RunState {
     use VirtualKeyCode::*;
-    let mut res = RunState::Paused;
+    let mut res = RunState::AwaitingInput;
 
     if let Some(key) = ctx.key {
-         res = RunState::Running;
+         res = RunState::PlayerTurn;
          match key {
             Up | K => try_move_player(0, -1, &mut gs.ecs),
             Left | H => try_move_player(-1, 0, &mut gs.ecs),
@@ -76,7 +132,7 @@ fn player_input(gs: &mut State, ctx: &mut Rltk) -> RunState {
             U => try_move_player(1, -1, &mut gs.ecs),
             N => try_move_player(1, 1, &mut gs.ecs),
             B => try_move_player(-1, 1, &mut gs.ecs),
-            _ => res = RunState::Paused,
+            _ => res = RunState::AwaitingInput,
         }
     }
 
@@ -87,8 +143,10 @@ fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
     let mut positions = ecs.write_storage::<Position>();
     let mut players = ecs.write_storage::<Player>();
     let mut viewsheds = ecs.write_storage::<Viewshed>();
+    let mut wants_to_melee = ecs.write_storage::<WantsToMelee>();
     let combat_stats = ecs.read_storage::<CombatStats>();
     let map = ecs.fetch::<map::TetraMap>();
+    let entities = ecs.entities();
 
     let mut player_pos = ecs.write_resource::<(i32, i32)>();
 
@@ -97,15 +155,16 @@ fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
         min(m, max(0, v))
     }
 
-    for (_player, pos, viewshed) in (&mut players, &mut positions, &mut viewsheds).join() {
+    for (ent, _player, pos, viewshed) in (&entities, &mut players, &mut positions, &mut viewsheds).join() {
 
         let new_x = clamp(map.width() - 1 , pos.x + delta_x);
         let new_y = clamp(map.height() - 1, pos.y + delta_y);
 
 
-        for ent in map.entities.get(pos.x + delta_x, pos.y + delta_y) {
-            if combat_stats.contains(*ent) {
-                info!("From Hells heart i stab thee {:?}", ent);
+        for potential_target in map.entities.get(pos.x + delta_x, pos.y + delta_y) {
+            if combat_stats.contains(*potential_target) {
+                debug!("From Hells heart i stab thee {:?}",  potential_target);
+                wants_to_melee.insert(ent, WantsToMelee{target: *potential_target}).expect("Add target failed"); // FIXME i dont like this error handling.
                 return; // so we dont move after attacking, i guess thats a way to do it, i dont like it FIXME
             }
         }
@@ -124,7 +183,6 @@ fn main() -> rltk::RltkError {
     let context = RltkBuilder::simple80x50().with_title("Tetra").build()?;
     let mut gs = State {
         ecs: World::new(),
-        runstate: RunState::Running,
     };
 
     env_logger::init();
@@ -137,6 +195,8 @@ fn main() -> rltk::RltkError {
     gs.ecs.register::<Player>();
     gs.ecs.register::<CombatStats>();
     gs.ecs.register::<BlocksTile>();
+    gs.ecs.register::<WantsToMelee>();
+    gs.ecs.register::<SufferDamage>();
 
     let starting_room = {
         const MAX_ROOMS: usize = 30;
@@ -209,7 +269,7 @@ fn main() -> rltk::RltkError {
     for pos in starting_room {
         // insert the player location into the global store for some reason.
         gs.ecs.insert(pos.clone());
-        gs.ecs
+        let player_entity = gs.ecs
             .create_entity()
             .with::<Position>(pos.into())
             .with(draw::Renderable {
@@ -236,7 +296,10 @@ fn main() -> rltk::RltkError {
             })
             .with(BlocksTile{})
             .build();
+        gs.ecs.insert(player_entity);
     }
+
+    gs.ecs.insert(RunState::PreRun);
 
     rltk::main_loop(context, gs)
 }

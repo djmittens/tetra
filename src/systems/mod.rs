@@ -1,6 +1,5 @@
 use crate::components::*;
 use log::*;
-use rltk::Point;
 use specs::prelude::*;
 use specs::System;
 
@@ -36,37 +35,50 @@ impl<'a> System<'a> for MonsterAi {
     type SystemData = (
         WriteExpect<'a, map::TetraMap>,
         ReadExpect<'a, (i32, i32)>,
-        ReadStorage<'a, Name>,
+        ReadExpect<'a, Entity>,
+        ReadExpect<'a, crate::RunState>,
+        Entities<'a>,
         WriteStorage<'a, Viewshed>,
         ReadStorage<'a, Monster>,
         WriteStorage<'a, Position>,
+        WriteStorage<'a, WantsToMelee>
     );
 
     fn run(
         &mut self,
-        (mut map, player_pos, name, mut viewshed, monster, mut pos): Self::SystemData,
+        (mut map, player_pos, player_entity, run_state, entities, mut viewshed, monster, mut positions, mut wants_to_melee): Self::SystemData,
     ) {
-        for (viewshed, name, _monster, pos) in (&mut viewshed, &name, &monster, &mut pos).join() {
+        // TODO get the RNG state out of here
+        use rltk::{a_star_search, BaseMap, RandomNumberGenerator};
+        if *run_state != crate::RunState::MonsterTurn{return;}
+        let mut rng = RandomNumberGenerator::new();
+        for (ent, viewshed, _monster, pos) in (&entities, &mut viewshed, &monster, &mut positions).join() {
             let idx = map.nav_buffer.xy_idx(player_pos.0, player_pos.1);
 
-            let distance =  rltk::DistanceAlg::Pythagoras.distance2d(rltk::Point::new(pos.x, pos.y), rltk::Point::new(player_pos.0, player_pos.1));
+            let distance = rltk::DistanceAlg::Pythagoras.distance2d(
+                rltk::Point::new(pos.x, pos.y),
+                rltk::Point::new(player_pos.0, player_pos.1),
+            );
             if distance < 1.5 {
-                // info!("{} Shouts insults towards {}", name.name, idx);
-                // info!("{:?}\n {}", viewshed, viewshed.visible_tiles.contains(&idx));
+                wants_to_melee.insert(ent, WantsToMelee{target: *player_entity}).expect("Unable to insert attack");
             }
 
             if viewshed.visible_tiles.contains(&idx) {
-                let path = rltk::a_star_search(
-                    map.nav_buffer.xy_idx(pos.x, pos.y),
-                    map.nav_buffer.xy_idx(player_pos.0, player_pos.1),
-                    &mut *map,
-                );
-                // info!("{} {:?}", path.success, path.steps);
-                if path.success && path.steps.len() > 1 {
-                    pos.x = path.steps[1] as i32 % map.width();
-                    pos.y = path.steps[1] as i32 / map.width();
-                    viewshed.dirty = true;
+
+                let target = (*map).get_available_exits(map.nav_buffer.xy_idx(player_pos.0, player_pos.1));
+                if let Some((target, _)) = rng.random_slice_entry(&target) {
+                    let path = a_star_search(
+                        map.nav_buffer.xy_idx(pos.x, pos.y),
+                        *target,
+                        &mut *map,
+                    );
+                    if path.success && path.steps.len() > 1 {
+                        pos.x = path.steps[1] as i32 % map.width();
+                        pos.y = path.steps[1] as i32 / map.width();
+                        viewshed.dirty = true;
+                    }
                 }
+
             }
         }
     }
@@ -83,7 +95,7 @@ impl<'a> System<'a> for MapIndexingSystem {
         WriteExpect<'a, map::TetraMap>,
         ReadStorage<'a, Position>,
         ReadStorage<'a, BlocksTile>,
-        Entities<'a>
+        Entities<'a>,
     );
 
     fn run(&mut self, (mut map, pos, tile, ent): Self::SystemData) {
@@ -96,4 +108,50 @@ impl<'a> System<'a> for MapIndexingSystem {
             map.entities.mutate(pos.x, pos.y, |x| x.push(ent));
         }
     }
+}
+
+pub struct MeleeCombatSystem {}
+
+impl<'a> System<'a> for MeleeCombatSystem {
+    type SystemData = (
+        Entities<'a>,
+        WriteStorage<'a, WantsToMelee>,
+        ReadStorage<'a, Name>,
+        ReadStorage<'a, CombatStats>,
+        WriteStorage<'a, SufferDamage>,
+    );
+    fn run(&mut self, (entities, mut want_melee, names, combat_stats, mut suffer_damage): Self::SystemData) {
+        for (_ent , want_melee, name, stats) in (&entities, &want_melee, &names, &combat_stats).join() {
+            let target_stats = combat_stats.get(want_melee.target).unwrap();
+            if target_stats.hp > 0 {
+                let target_name = names.get(want_melee.target).unwrap();
+                let damage = i32::max(0, stats.power - target_stats.defense);
+
+                if damage == 0 {
+                    info!("{} is unable to hurt {}", name.name, target_name.name);
+                } else {
+                    info!("{} hits, for {} hp", name.name, target_name.name);
+                    SufferDamage::new_damage(&mut suffer_damage, want_melee.target, damage);
+                }
+            }
+        }
+
+        want_melee.clear();
+    }
+}
+
+pub struct DamageSystem {}
+impl<'a> System<'a> for DamageSystem {
+    type SystemData = (
+        WriteStorage<'a, CombatStats>,
+        WriteStorage<'a, SufferDamage>,
+    );
+
+    fn run(&mut self, (mut stats, mut damage): Self::SystemData) {
+        for (mut stats, damage) in (&mut stats, &damage).join() {
+            stats.hp -= damage.amount.iter().sum::<i32>();
+        }
+        damage.clear();
+    }
+
 }
