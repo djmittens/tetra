@@ -1,9 +1,10 @@
 name: Rust
 
-on:
-  push:
-    tags:
-      - v*
+on: 
+  [workflow_dispatch]
+  # push:
+    # tags:
+      # - v*
 #   push:
 #     branches: [ master ]
 #   pull_request:
