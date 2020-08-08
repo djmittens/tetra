@@ -202,14 +202,18 @@ fn main() -> rltk::RltkError {
         const MAX_ROOMS: usize = 30;
         const MIN_SIZE: i32 = 6;
         const MAX_SIZE: i32 = 10;
+        const MAP_WIDTH: i32 = 80;
+        const MAP_HEIGHT: i32 = 50;
 
         let mut rng = rltk::RandomNumberGenerator::new();
+
         let map = map::new_map_rooms_and_corridors(
+            MAP_WIDTH, MAP_HEIGHT,  
             std::iter::from_fn(|| {
                 let w = rng.range(MIN_SIZE, MAX_SIZE);
                 let h = rng.range(MIN_SIZE, MAX_SIZE);
-                let x = rng.roll_dice(1, 80 - w - 1) - 1;
-                let y = rng.roll_dice(1, 50 - h - 1) - 1;
+                let x = rng.roll_dice(1, MAP_WIDTH - w - 1) - 1;
+                let y = rng.roll_dice(1, MAP_HEIGHT - h - 1) - 1;
                 Some(map::Room::new(x, y, w, h))
             })
             .take(MAX_ROOMS),

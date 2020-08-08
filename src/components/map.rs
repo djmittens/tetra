@@ -134,38 +134,13 @@ pub enum TileType {
 
 pub type Room = Rect;
 
-/// Make a new map or something.
-pub fn _new_map<I>(wall_ids: I) -> TileBuffer
-where
-    I: IntoIterator<Item = usize>,
-{
-    // let mut map = vec![TileType::Floor; 80 * 50];
-    let mut map = TileBuffer::new(80, 50, TileType::Floor);
 
-    for x in 0..80 {
-        map.set(x, 0, TileType::Wall);
-        map.set(x, 49, TileType::Wall);
-    }
-
-    for y in 0..50 {
-        map.set(0, y, TileType::Wall);
-        map.set(79, y, TileType::Wall);
-    }
-
-    wall_ids.into_iter().for_each(|idx| {
-        if idx != map.xy_idx(40, 25) {
-            map.data[idx] = TileType::Wall;
-        }
-    });
-    map
-}
-
-pub fn new_map_rooms_and_corridors<T>(rooms: T) -> TetraMap
+pub fn new_map_rooms_and_corridors<T>(width: i32, height: i32, rooms: T) -> TetraMap
 where
     T: IntoIterator<Item = Room>,
 {
     // let mut map = vec![TileType::Wall; 80 * 50];
-    let mut level = TetraMap::new(TileBuffer::new(80, 50, TileType::Wall));
+    let mut level = TetraMap::new(TileBuffer::new(width, height, TileType::Wall));
     rooms.into_iter().for_each(|r| {
         level.try_add_room(r);
     });
