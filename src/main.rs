@@ -9,9 +9,12 @@ extern crate log;
 extern crate specs;
 
 mod components;
+mod gui;
 mod draw;
 mod systems;
 mod util;
+
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 pub struct State {
     pub ecs: World,
@@ -51,6 +54,7 @@ impl GameState for State {
 
         // let map = self.ecs.fetch::<map::TetraMap>();
         draw::draw_map(&self.ecs, ctx);
+        gui::draw_ui(&self.ecs, ctx);
 
         // Draw other renderable bs.
         {
@@ -63,7 +67,7 @@ impl GameState for State {
             }
         }
 
-        ctx.print(1, 1, "Tetra Beta v0.0.1");
+        ctx.print(1, 1, format!("Tetra Early Preview v{}", VERSION));
     }
 }
 
@@ -203,7 +207,7 @@ fn main() -> rltk::RltkError {
         const MIN_SIZE: i32 = 6;
         const MAX_SIZE: i32 = 10;
         const MAP_WIDTH: i32 = 80;
-        const MAP_HEIGHT: i32 = 50;
+        const MAP_HEIGHT: i32 = 43;
 
         let mut rng = rltk::RandomNumberGenerator::new();
 
@@ -267,6 +271,7 @@ fn main() -> rltk::RltkError {
 
         let res = res.map(|x| x.center());
         gs.ecs.insert(map);
+        gs.ecs.insert(GameLog{entries: vec!["Welcome to tetra, young traveler !".to_string()]});
         res
     };
 

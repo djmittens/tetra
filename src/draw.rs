@@ -4,7 +4,6 @@ use rltk::SmallVec;
 use rltk::{field_of_view, Algorithm2D, BaseMap, Point, Rltk, RGB};
 use specs::prelude::*;
 use specs_derive::Component;
-use log::*;
 
 #[derive(Component)]
 pub struct Renderable {

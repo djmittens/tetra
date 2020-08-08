@@ -29,7 +29,7 @@ impl TetraMap {
         self.buffer.height
     }
 
-    pub fn dimensions(&self) -> (i32, i32) {
+    pub fn _dimensions(&self) -> (i32, i32) {
         (self.width(), self.height())
     }
 
@@ -120,7 +120,7 @@ where
         func(&mut self.data[idx]);
     }
 
-    pub fn contains_at(&self, x: i32, y: i32, tile: &T) -> bool {
+    pub fn _contains_at(&self, x: i32, y: i32, tile: &T) -> bool {
         let idx = self.xy_idx(x, y);
         &self.data[idx] == tile
     }

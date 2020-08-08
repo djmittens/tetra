@@ -8,6 +8,8 @@ use std::collections::HashSet;
 use serde::*;
 
 pub mod map;
+pub mod gamelog;
+pub use gamelog::GameLog;
 
 #[derive(Component, Debug)]
 pub struct Position {
