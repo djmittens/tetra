@@ -41,18 +41,31 @@ impl<'a> System<'a> for MonsterAi {
         WriteStorage<'a, Viewshed>,
         ReadStorage<'a, Monster>,
         WriteStorage<'a, Position>,
-        WriteStorage<'a, WantsToMelee>
+        WriteStorage<'a, WantsToMelee>,
     );
 
     fn run(
         &mut self,
-        (mut map, player_pos, player_entity, run_state, entities, mut viewshed, monster, mut positions, mut wants_to_melee): Self::SystemData,
+        (
+            mut map,
+            player_pos,
+            player_entity,
+            run_state,
+            entities,
+            mut viewshed,
+            monster,
+            mut positions,
+            mut wants_to_melee,
+        ): Self::SystemData,
     ) {
         // TODO get the RNG state out of here
-        use rltk::{a_star_search, BaseMap, RandomNumberGenerator};
-        if *run_state != crate::RunState::MonsterTurn{return;}
-        let mut rng = RandomNumberGenerator::new();
-        for (ent, viewshed, _monster, pos) in (&entities, &mut viewshed, &monster, &mut positions).join() {
+        use rltk::{a_star_search};
+        if *run_state != crate::RunState::MonsterTurn {
+            return;
+        }
+        for (ent, viewshed, _monster, pos) in
+            (&entities, &mut viewshed, &monster, &mut positions).join()
+        {
             let idx = map.nav_buffer.xy_idx(player_pos.0, player_pos.1);
 
             let distance = rltk::DistanceAlg::Pythagoras.distance2d(
@@ -60,25 +73,29 @@ impl<'a> System<'a> for MonsterAi {
                 rltk::Point::new(player_pos.0, player_pos.1),
             );
             if distance < 1.5 {
-                wants_to_melee.insert(ent, WantsToMelee{target: *player_entity}).expect("Unable to insert attack");
+                wants_to_melee
+                    .insert(
+                        ent,
+                        WantsToMelee {
+                            target: *player_entity,
+                        },
+                    )
+                    .expect("Unable to insert attack");
             }
 
             if viewshed.visible_tiles.contains(&idx) {
-
-                let target = (*map).get_available_exits(map.nav_buffer.xy_idx(player_pos.0, player_pos.1));
-                if let Some((target, _)) = rng.random_slice_entry(&target) {
-                    let path = a_star_search(
-                        map.nav_buffer.xy_idx(pos.x, pos.y),
-                        *target,
-                        &mut *map,
-                    );
-                    if path.success && path.steps.len() > 1 {
-                        pos.x = path.steps[1] as i32 % map.width();
-                        pos.y = path.steps[1] as i32 / map.width();
-                        viewshed.dirty = true;
-                    }
+                let path = a_star_search(
+                    // map.nav_buffer.xy_idx(pos.x, pos.y),
+                    map.nav_buffer.xy_idx(pos.x, pos.y),
+                    map.nav_buffer.xy_idx(player_pos.0, player_pos.1),
+                    // *target,
+                    &mut *map,
+                );
+                if path.success && path.steps.len() > 2 {
+                    pos.x = path.steps[1] as i32 % map.width();
+                    pos.y = path.steps[1] as i32 / map.width();
+                    viewshed.dirty = true;
                 }
-
             }
         }
     }
@@ -115,22 +132,34 @@ pub struct MeleeCombatSystem {}
 impl<'a> System<'a> for MeleeCombatSystem {
     type SystemData = (
         Entities<'a>,
+        WriteExpect<'a, GameLog>,
         WriteStorage<'a, WantsToMelee>,
         ReadStorage<'a, Name>,
         ReadStorage<'a, CombatStats>,
         WriteStorage<'a, SufferDamage>,
     );
-    fn run(&mut self, (entities, mut want_melee, names, combat_stats, mut suffer_damage): Self::SystemData) {
-        for (_ent , want_melee, name, stats) in (&entities, &want_melee, &names, &combat_stats).join() {
+    fn run(
+        &mut self,
+        (entities, mut game_log, mut want_melee, names, combat_stats, mut suffer_damage): Self::SystemData,
+    ) {
+        for (_ent, want_melee, name, stats) in
+            (&entities, &want_melee, &names, &combat_stats).join()
+        {
             let target_stats = combat_stats.get(want_melee.target).unwrap();
             if target_stats.hp > 0 {
                 let target_name = names.get(want_melee.target).unwrap();
                 let damage = i32::max(0, stats.power - target_stats.defense);
 
                 if damage == 0 {
-                    info!("{} is unable to hurt {}", name.name, target_name.name);
+                    game_log.say(format!(
+                        "{} is unable to hurt {}",
+                        name.name, target_name.name
+                    ));
                 } else {
-                    info!("{} hits, for {} hp", name.name, target_name.name);
+                    game_log.say(format!(
+                        "{} hits {}, for {} hp",
+                        name.name, target_name.name, damage
+                    ));
                     SufferDamage::new_damage(&mut suffer_damage, want_melee.target, damage);
                 }
             }
@@ -153,5 +182,4 @@ impl<'a> System<'a> for DamageSystem {
         }
         damage.clear();
     }
-
 }
