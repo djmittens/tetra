@@ -1,11 +1,11 @@
 name: Rust-Release
 on:
-  [workflow_dispatch]
+  # [workflow_dispatch]
   # push:
     # tags:
       # - v*
-  #   push:
-  #     branches: [ master ]
+  push:
+    branches: [ master ]
   #   pull_request:
   #     branches: [ master ]
 
