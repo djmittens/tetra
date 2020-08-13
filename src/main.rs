@@ -16,6 +16,15 @@ mod util;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
+impl util::Rng for rltk::RandomNumberGenerator {
+    fn next_int(&mut self) -> i32 {
+        self.rand()
+    }
+    fn between(&mut self, k: i32, n: i32 ) -> i32 {
+        self.range(k , n)
+    }
+}
+
 fn main() -> rltk::RltkError {
     let mut context = RltkBuilder::simple80x50().with_title("Tetra").build()?;
     context.with_post_scanlines(true);
@@ -44,20 +53,20 @@ fn main() -> rltk::RltkError {
         const MAP_WIDTH: i32 = 80;
         const MAP_HEIGHT: i32 = 43;
 
-        let mut rng = rltk::RandomNumberGenerator::new();
+        let mut rng: Box<dyn util::Rng + Send + Sync> = Box::new(rltk::RandomNumberGenerator::new());
 
         let map = map::new_map_rooms_and_corridors(
             MAP_WIDTH, MAP_HEIGHT,  
             std::iter::from_fn(|| {
-                let w = rng.range(MIN_SIZE, MAX_SIZE);
-                let h = rng.range(MIN_SIZE, MAX_SIZE);
-                let x = rng.roll_dice(1, MAP_WIDTH - w - 1) - 1;
-                let y = rng.roll_dice(1, MAP_HEIGHT - h - 1) - 1;
+                let w = rng.between(MIN_SIZE, MAX_SIZE);
+                let h = rng.between(MIN_SIZE, MAX_SIZE);
+                let x = rng.between(1, MAP_WIDTH - w) - 1;
+                let y = rng.between(1, MAP_HEIGHT - h) - 1;
                 Some(map::Room::new(x, y, w, h))
             })
             .take(MAX_ROOMS),
         );
-        let res = rng.random_slice_entry(map.rooms.as_slice());
+        let res = util::choose_element(rng.as_mut(), map.rooms.as_slice());
 
         for res in res {
             for (i, room) in map.rooms.iter().enumerate() {
@@ -66,7 +75,7 @@ fn main() -> rltk::RltkError {
                     let glyph: u16;
                     let name: String;
 
-                    match rng.roll_dice(1, 2) {
+                    match rng.between(1, 2) {
                         1 => {
                             glyph = rltk::to_cp437('g');
                             name = format!("{} #{}", "Globlin", i);
@@ -105,6 +114,7 @@ fn main() -> rltk::RltkError {
         }
 
         let res = res.map(|x| x.center());
+        gs.ecs.insert(rng);
         gs.ecs.insert(map);
         gs.ecs.insert(GameLog{entries: vec!["Welcome to tetra, young traveler !".to_string()]});
         res
@@ -157,6 +167,7 @@ pub struct State {
 impl GameState for State {
     fn tick(&mut self, ctx: &mut Rltk) {
         ctx.cls();
+        delete_the_dead(&mut self.ecs);
 
         let mut newrunstate = *self.ecs.fetch::<RunState>();
 
@@ -183,8 +194,6 @@ impl GameState for State {
             let mut runwriter = self.ecs.write_resource::<RunState>();
             *runwriter = newrunstate;
         }
-
-        delete_the_dead(&mut self.ecs);
 
         // let map = self.ecs.fetch::<map::TetraMap>();
         draw::draw_map(&self.ecs, ctx);
@@ -323,3 +332,4 @@ fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
         }
     }
 }
+
