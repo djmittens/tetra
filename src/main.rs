@@ -69,8 +69,9 @@ fn main() -> rltk::RltkError {
         for res in res {
             for (i, room) in map.rooms.iter().enumerate() {
                 if room != res {
-                    let (x, y) = room.center();
-                    spawner::random_monster(&mut gs.ecs, x, y);
+                    spawner::spawn_room(&mut gs.ecs, room, spawner::SpawnerSettings::default());
+                    // let (x, y) = room.center();
+                    // spawner::random_monster(&mut gs.ecs, x, y);
                 }
             }
         }

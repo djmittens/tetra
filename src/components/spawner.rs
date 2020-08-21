@@ -3,7 +3,7 @@ use crate::components::*;
 use specs::prelude::*;
 //TODO clearly  less than ideal
 use crate::draw;
-use crate::util::{Rng, RngResource, choose_element};
+use crate::util::{Rng, RngResource, choose_element, Rect};
 use rltk;
 use rltk::RGB;
 
@@ -41,7 +41,7 @@ pub fn player(ecs: &mut World, player_x: i32, player_y: i32) -> Entity {
 pub fn random_monster(ecs: &mut World, x: i32, y: i32) {
     let roll: i32 = {
         let mut rng = ecs.write_resource::<RngResource>();
-        rng.between(1, 2)
+        rng.between(0, 2)
     };
 
     if roll == 1 {
@@ -84,4 +84,42 @@ fn monster<S: ToString>(ecs: &mut World, x: i32, y: i32, glyph: char, name: S) {
             defense: 1,
         })
         .build();
+}
+
+pub struct SpawnerSettings {
+    pub max_monsters: i32 ,
+    pub max_items: i32 ,
+}
+
+impl Default for SpawnerSettings {
+    fn default() -> Self {
+        SpawnerSettings{max_monsters:4, max_items: 4}
+    }
+
+}
+
+pub fn spawn_room(ecs: &mut World, room: &Rect, SpawnerSettings{max_monsters, max_items}: SpawnerSettings) {
+    let mut spawn_points: HashSet<(usize, usize)> = HashSet::new();
+
+    {
+        let mut rng = ecs.write_resource::<RngResource>();
+        let n_monsters = rng.between(0, max_monsters);
+
+        for _i in 0 .. n_monsters {
+            let mut added = false;
+            while !added {
+                let xy = (rng.between(room.x1 + 1, room.x2) as usize, rng.between(room.y1 + 1, room.y2) as usize);
+
+                if !spawn_points.contains(&xy) {
+                    spawn_points.insert(xy);
+                    added = true;
+                }
+            }
+        };
+
+    }
+
+    for (x, y) in spawn_points.iter() {
+        random_monster(ecs, *x as i32, *y as i32);
+    }
 }
