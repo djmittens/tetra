@@ -7,8 +7,10 @@ pub trait Rng {
     fn between(&mut self, k: i32, n: i32 ) -> i32;
 }
 
+pub type RngResource = Box<dyn Rng + Send + Sync>;
 
-pub fn choose_element<'a,R : Rng + ?Sized, T> (rng: &mut R, slice: &'a [T]) -> Option<&'a T> {
+
+pub fn choose_element<'a,R: Rng + ?Sized, T> (rng: &mut R, slice: &'a [T]) -> Option<&'a T> {
     if slice.is_empty() {
         None
     } else {

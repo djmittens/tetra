@@ -34,7 +34,6 @@ pub struct MonsterAi {}
 impl<'a> System<'a> for MonsterAi {
     type SystemData = (
         WriteExpect<'a, map::TetraMap>,
-        ReadExpect<'a, (i32, i32)>,
         ReadExpect<'a, Entity>,
         ReadExpect<'a, crate::RunState>,
         Entities<'a>,
@@ -48,7 +47,6 @@ impl<'a> System<'a> for MonsterAi {
         &mut self,
         (
             mut map,
-            player_pos,
             player_entity,
             run_state,
             entities,
@@ -58,36 +56,26 @@ impl<'a> System<'a> for MonsterAi {
             mut wants_to_melee,
         ): Self::SystemData,
     ) {
+
         // TODO get the RNG state out of here
         use rltk::{a_star_search};
         if *run_state != crate::RunState::MonsterTurn {
             return;
         }
+
+        let player_entity = *player_entity;
+        let Position {x:px, y: py} = *positions.get(player_entity).expect("Player is expected to be positional");
+
         for (ent, viewshed, _monster, pos) in
             (&entities, &mut viewshed, &monster, &mut positions).join()
         {
-            let idx = map.nav_buffer.xy_idx(player_pos.0, player_pos.1);
-
-            let distance = rltk::DistanceAlg::Pythagoras.distance2d(
-                rltk::Point::new(pos.x, pos.y),
-                rltk::Point::new(player_pos.0, player_pos.1),
-            );
-            if distance < 1.5 {
-                wants_to_melee
-                    .insert(
-                        ent,
-                        WantsToMelee {
-                            target: *player_entity,
-                        },
-                    )
-                    .expect("Unable to insert attack");
-            }
+            let idx = map.nav_buffer.xy_idx(px, py);
 
             if viewshed.visible_tiles.contains(&idx) {
                 let path = a_star_search(
                     // map.nav_buffer.xy_idx(pos.x, pos.y),
                     map.nav_buffer.xy_idx(pos.x, pos.y),
-                    map.nav_buffer.xy_idx(player_pos.0, player_pos.1),
+                    map.nav_buffer.xy_idx(px, py),
                     // *target,
                     &mut *map,
                 );
@@ -96,6 +84,22 @@ impl<'a> System<'a> for MonsterAi {
                     pos.y = path.steps[1] as i32 / map.width();
                     viewshed.dirty = true;
                 }
+            }
+
+            let distance = rltk::DistanceAlg::Pythagoras.distance2d(
+                rltk::Point::new(pos.x, pos.y),
+                rltk::Point::new(px, py),
+            );
+
+            if distance < 1.5 {
+                wants_to_melee
+                    .insert(
+                        ent,
+                        WantsToMelee {
+                            target: player_entity,
+                        },
+                    )
+                    .expect("Unable to insert attack");
             }
         }
     }

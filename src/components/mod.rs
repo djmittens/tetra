@@ -9,6 +9,7 @@ use serde::*;
 
 pub mod map;
 pub mod gamelog;
+pub mod spawner;
 pub use gamelog::GameLog;
 
 #[derive(Component, Debug)]
