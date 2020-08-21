@@ -34,6 +34,8 @@ fn main() -> rltk::RltkError {
     gs.ecs.register::<BlocksTile>();
     gs.ecs.register::<WantsToMelee>();
     gs.ecs.register::<SufferDamage>();
+    gs.ecs.register::<Potion>();
+    gs.ecs.register::<Item>();
 
     {
         let rng: util::RngResource = Box::new(rltk::RandomNumberGenerator::new());

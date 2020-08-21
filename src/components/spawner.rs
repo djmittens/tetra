@@ -7,36 +7,51 @@ use crate::util::{Rng, RngResource, choose_element, Rect};
 use rltk;
 use rltk::RGB;
 
+pub fn spawn_room(ecs: &mut World, room: &Rect, SpawnerSettings{max_monsters, max_items}: SpawnerSettings) {
+    let mut spawn_points: HashSet<(usize, usize)> = HashSet::new();
+    let mut item_points: HashSet<(usize, usize)> = HashSet::new();
+
+    //TODO i can make this so much better by instead generating an infinite stream of valid spawn points, and then taking the right amount for each type
+    {
+        let mut rng = ecs.write_resource::<RngResource>();
+        let n_monsters = rng.between(0, max_monsters);
+        let n_items = rng.between(0, max_items);
+
+        for _i in 0 .. n_monsters {
+            let mut added = false;
+            while !added {
+                let xy = (rng.between(room.x1 + 1, room.x2) as usize, rng.between(room.y1 + 1, room.y2) as usize);
+
+                if !spawn_points.contains(&xy) {
+                    spawn_points.insert(xy);
+                    added = true;
+                }
+            }
+        }
+
+        for _i in 0..n_items {
+            let mut added = false;
+            while !added {
+                let xy = (rng.between(room.x1 + 1, room.x2) as usize, rng.between(room.y1 + 1, room.y2) as usize);
+                if !item_points.contains(&xy) && !spawn_points.contains(&xy) {
+                    item_points.insert(xy);
+                    added = true;
+                }
+            }
+        }
+
+    }
+
+    for (x, y) in spawn_points.iter() {
+        random_monster(ecs, *x as i32, *y as i32);
+    }
+
+    for (x, y) in item_points.iter() {
+        health_potion(ecs, *x as i32, *y as i32);
+    }
+}
 // pub fn entity(ecs: &mut World, ent: &Entity, pos_x: i32, pos_y: i32)
 
-pub fn player(ecs: &mut World, player_x: i32, player_y: i32) -> Entity {
-    ecs.create_entity()
-        .with::<Position>((player_x, player_y).into())
-        .with(draw::Renderable {
-            glyph: rltk::to_cp437('@'),
-            fg: RGB::named(rltk::YELLOW),
-            bg: RGB::named(rltk::BLACK),
-        })
-        .with(Player {
-            revealed_tiles: HashSet::new(),
-        })
-        .with(Viewshed {
-            visible_tiles: HashSet::new(),
-            range: 8,
-            dirty: true,
-        })
-        .with(Name {
-            name: "Player".into(),
-        })
-        .with(CombatStats {
-            max_hp: 30,
-            hp: 30,
-            power: 5,
-            defense: 2,
-        })
-        // .with(BlocksTile{})
-        .build()
-}
 
 pub fn random_monster(ecs: &mut World, x: i32, y: i32) {
     let roll: i32 = {
@@ -86,6 +101,49 @@ fn monster<S: ToString>(ecs: &mut World, x: i32, y: i32, glyph: char, name: S) {
         .build();
 }
 
+pub fn player(ecs: &mut World, player_x: i32, player_y: i32) -> Entity {
+    ecs.create_entity()
+        .with::<Position>((player_x, player_y).into())
+        .with(draw::Renderable {
+            glyph: rltk::to_cp437('@'),
+            fg: RGB::named(rltk::YELLOW),
+            bg: RGB::named(rltk::BLACK),
+        })
+        .with(Player {
+            revealed_tiles: HashSet::new(),
+        })
+        .with(Viewshed {
+            visible_tiles: HashSet::new(),
+            range: 8,
+            dirty: true,
+        })
+        .with(Name {
+            name: "Player".into(),
+        })
+        .with(CombatStats {
+            max_hp: 30,
+            hp: 30,
+            power: 5,
+            defense: 2,
+        })
+        // .with(BlocksTile{})
+        .build()
+}
+
+fn health_potion(ecs: &mut World, x: i32, y: i32) {
+    ecs.create_entity()
+        .with(Position{x, y})
+        .with(draw::Renderable {
+            glyph: rltk::to_cp437('¡'),
+            fg: RGB::named(rltk::MAGENTA),
+            bg: RGB::named(rltk::BLACK)
+        })
+        .with(Name{name: "Health Potion".into()})
+        .with(Item{})
+        .with(Potion{heal_amount: 8})
+        .build();
+}
+
 pub struct SpawnerSettings {
     pub max_monsters: i32 ,
     pub max_items: i32 ,
@@ -96,30 +154,4 @@ impl Default for SpawnerSettings {
         SpawnerSettings{max_monsters:4, max_items: 4}
     }
 
-}
-
-pub fn spawn_room(ecs: &mut World, room: &Rect, SpawnerSettings{max_monsters, max_items}: SpawnerSettings) {
-    let mut spawn_points: HashSet<(usize, usize)> = HashSet::new();
-
-    {
-        let mut rng = ecs.write_resource::<RngResource>();
-        let n_monsters = rng.between(0, max_monsters);
-
-        for _i in 0 .. n_monsters {
-            let mut added = false;
-            while !added {
-                let xy = (rng.between(room.x1 + 1, room.x2) as usize, rng.between(room.y1 + 1, room.y2) as usize);
-
-                if !spawn_points.contains(&xy) {
-                    spawn_points.insert(xy);
-                    added = true;
-                }
-            }
-        };
-
-    }
-
-    for (x, y) in spawn_points.iter() {
-        random_monster(ecs, *x as i32, *y as i32);
-    }
 }
