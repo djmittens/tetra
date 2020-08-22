@@ -1,5 +1,5 @@
 use crate::components::*;
-use log::*;
+
 use specs::prelude::*;
 
 pub struct VisibilitySystem {}

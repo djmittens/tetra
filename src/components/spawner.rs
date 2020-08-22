@@ -1,9 +1,9 @@
 // use crate::util::Rng;
 use crate::components::*;
-use specs::prelude::*;
+
 //TODO clearly  less than ideal
 use crate::draw;
-use crate::util::{Rng, RngResource, choose_element, Rect};
+use crate::util::{RngResource, Rect};
 use rltk;
 use rltk::RGB;
 

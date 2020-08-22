@@ -1,8 +1,8 @@
 use components::*;
 use log::*;
-use rltk::{GameState, Rltk, RltkBuilder, VirtualKeyCode, RGB};
+use rltk::{GameState, Rltk, RltkBuilder, VirtualKeyCode};
 use specs::prelude::*;
-use std::collections::HashSet;
+
 
 extern crate env_logger;
 extern crate log;
@@ -71,7 +71,7 @@ fn main() -> rltk::RltkError {
         };
 
         for res in res {
-            for (i, room) in map.rooms.iter().enumerate() {
+            for (_i, room) in map.rooms.iter().enumerate() {
                 if room != res {
                     spawner::spawn_room(&mut gs.ecs, room, spawner::SpawnerSettings::default());
                     // let (x, y) = room.center();
