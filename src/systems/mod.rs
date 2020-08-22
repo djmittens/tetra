@@ -1,7 +1,6 @@
 use crate::components::*;
 use log::*;
 use specs::prelude::*;
-use specs::System;
 
 pub struct VisibilitySystem {}
 impl<'a> System<'a> for VisibilitySystem {
@@ -56,15 +55,16 @@ impl<'a> System<'a> for MonsterAi {
             mut wants_to_melee,
         ): Self::SystemData,
     ) {
-
         // TODO get the RNG state out of here
-        use rltk::{a_star_search};
+        use rltk::a_star_search;
         if *run_state != crate::RunState::MonsterTurn {
             return;
         }
 
         let player_entity = *player_entity;
-        let Position {x:px, y: py} = *positions.get(player_entity).expect("Player is expected to be positional");
+        let Position { x: px, y: py } = *positions
+            .get(player_entity)
+            .expect("Player is expected to be positional");
 
         for (ent, viewshed, _monster, pos) in
             (&entities, &mut viewshed, &monster, &mut positions).join()
@@ -86,10 +86,8 @@ impl<'a> System<'a> for MonsterAi {
                 }
             }
 
-            let distance = rltk::DistanceAlg::Pythagoras.distance2d(
-                rltk::Point::new(pos.x, pos.y),
-                rltk::Point::new(px, py),
-            );
+            let distance = rltk::DistanceAlg::Pythagoras
+                .distance2d(rltk::Point::new(pos.x, pos.y), rltk::Point::new(px, py));
 
             if distance < 1.5 {
                 wants_to_melee
@@ -185,5 +183,41 @@ impl<'a> System<'a> for DamageSystem {
             stats.hp -= damage.amount.iter().sum::<i32>();
         }
         damage.clear();
+    }
+}
+
+pub struct ItemCollectionSystem {}
+impl<'a> System<'a> for ItemCollectionSystem {
+    type SystemData = (
+        ReadExpect<'a, Entity>,
+        WriteExpect<'a, GameLog>,
+        WriteStorage<'a, WantsToPickupItem>,
+        WriteStorage<'a, Position>,
+        ReadStorage<'a, Name>,
+        WriteStorage<'a, InBackpack>,
+    );
+    fn run(
+        &mut self,
+        (player, mut game_log, mut pickup_items, mut positions, names, mut backpacks): Self::SystemData,
+    ) {
+        for pickup in pickup_items.join() {
+            positions.remove(pickup.item);
+            backpacks
+                .insert(
+                    pickup.item,
+                    InBackpack {
+                        owner: pickup.collected_by,
+                    },
+                )
+                .expect("Unable to insert into the backpack");
+
+            if pickup.collected_by == *player {
+                game_log.entries.push(format!(
+                    "You have picked up {}.",
+                    names.get(pickup.item).unwrap().name
+                ));
+            }
+        }
+        pickup_items.clear();
     }
 }

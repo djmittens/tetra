@@ -33,9 +33,11 @@ fn main() -> rltk::RltkError {
     gs.ecs.register::<CombatStats>();
     gs.ecs.register::<BlocksTile>();
     gs.ecs.register::<WantsToMelee>();
+    gs.ecs.register::<WantsToPickupItem>();
     gs.ecs.register::<SufferDamage>();
     gs.ecs.register::<Potion>();
     gs.ecs.register::<Item>();
+    gs.ecs.register::<InBackpack>();
 
     {
         let rng: util::RngResource = Box::new(rltk::RandomNumberGenerator::new());
@@ -158,18 +160,19 @@ impl GameState for State {
 
 impl State {
     fn run_systems(&mut self) {
-        // let mut lw = LeftWalker {};
-        // lw.run_now(&self.ecs);
         let mut vis = systems::VisibilitySystem {};
         let mut melee = systems::MeleeCombatSystem {};
         let mut damage = systems::DamageSystem {};
         let mut ai = systems::MonsterAi {};
         let mut mis = systems::MapIndexingSystem {};
+        let mut loot_system = systems::ItemCollectionSystem {};
         ai.run_now(&self.ecs);
         mis.run_now(&self.ecs);
+        loot_system.run_now(&self.ecs);
         vis.run_now(&self.ecs);
         melee.run_now(&self.ecs);
         damage.run_now(&self.ecs);
+
         self.ecs.maintain();
     }
 }
@@ -226,6 +229,7 @@ fn player_input(gs: &mut State, ctx: &mut Rltk) -> RunState {
             U => try_move_player(1, -1, &mut gs.ecs),
             N => try_move_player(1, 1, &mut gs.ecs),
             B => try_move_player(-1, 1, &mut gs.ecs),
+            G => get_item(&mut gs.ecs),
             _ => res = RunState::AwaitingInput,
         }
     }
@@ -273,6 +277,31 @@ fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
             pos.x = new_x;
             pos.y = new_y;
             viewshed.dirty = true;
+        }
+    }
+}
+
+fn get_item(ecs: &mut World) {
+    let player = ecs.fetch::<Entity>();
+    let player = *player;
+    let entities = ecs.entities();
+    let items = ecs.read_storage::<Item>();
+    let positions = ecs.read_storage::<Position>();
+    let mut gamelog = ecs.fetch_mut::<GameLog>();
+
+    let mut target_item : Option<Entity> = None;
+    for (item_entity, _item, position) in (&entities, &items, &positions).join() {
+        let p_pos = positions.get(player).unwrap();
+        if position.x == p_pos.x && position.y == p_pos.y {
+            target_item = Some(item_entity);
+        }
+    }
+
+    match target_item {
+        None => gamelog.entries.push("There is nothing here to pickup.".to_string()),
+        Some(item) => {
+            let mut pickup = ecs.write_storage::<WantsToPickupItem>();
+            pickup.insert(player, WantsToPickupItem{collected_by: player, item}).expect("Could not notify of item pickup");
         }
     }
 }
