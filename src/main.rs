@@ -38,6 +38,8 @@ fn main() -> rltk::RltkError {
     gs.ecs.register::<Potion>();
     gs.ecs.register::<Item>();
     gs.ecs.register::<InBackpack>();
+    gs.ecs.register::<WantsToDrinkPotion>();
+    gs.ecs.register::<WantsToDropItem>();
 
     {
         let rng: util::RngResource = Box::new(rltk::RandomNumberGenerator::new());
@@ -111,32 +113,6 @@ impl GameState for State {
         ctx.cls();
         delete_the_dead(&mut self.ecs);
 
-        let mut newrunstate = *self.ecs.fetch::<RunState>();
-
-        if newrunstate != RunState::AwaitingInput {
-            self.run_systems();
-        }
-
-        match newrunstate {
-            RunState::PreRun => {
-                newrunstate = RunState::AwaitingInput;
-            }
-            RunState::AwaitingInput => {
-                newrunstate = player_input(self, ctx);
-            }
-            RunState::PlayerTurn => {
-                newrunstate = RunState::MonsterTurn;
-            }
-            RunState::MonsterTurn => {
-                newrunstate = RunState::AwaitingInput;
-            }
-        }
-
-        {
-            let mut runwriter = self.ecs.write_resource::<RunState>();
-            *runwriter = newrunstate;
-        }
-
         // let map = self.ecs.fetch::<map::TetraMap>();
         draw::draw_map(&self.ecs, ctx);
 
@@ -154,6 +130,47 @@ impl GameState for State {
 
         gui::draw_tooltips(&self.ecs, ctx);
 
+        let mut newrunstate = *self.ecs.fetch::<RunState>();
+
+        match newrunstate {
+            RunState::PreRun => {
+                self.run_systems();
+                newrunstate = RunState::AwaitingInput;
+            }
+            RunState::AwaitingInput => {
+                newrunstate = player_input(self, ctx);
+            }
+            RunState::PlayerTurn => {
+                self.run_systems();
+                newrunstate = RunState::MonsterTurn;
+            }
+            RunState::MonsterTurn => {
+                self.run_systems();
+                newrunstate = RunState::AwaitingInput;
+            },
+            RunState::InventoryScreen => {
+                let res = gui::show_inventory(&mut self.ecs, ctx);
+                match res {
+                    (gui::ItemMenuResult::Cancel, _) => newrunstate = RunState::AwaitingInput,
+                    (gui::ItemMenuResult::NoResponse, _) => {},
+                    (gui::ItemMenuResult::Selected, Some(item)) => {
+                        let mut intent = self.ecs.write_storage::<WantsToDrinkPotion>();
+                        intent.insert(*self.ecs.fetch::<Entity>(), WantsToDrinkPotion{potion: item}).expect("Unable to insert intent");
+                        newrunstate = RunState::PlayerTurn;
+                    },
+                    (_, None) => {},
+                }
+            },
+            RunState::DropItemScreen => {
+            },
+        }
+
+        {
+            let mut runwriter = self.ecs.write_resource::<RunState>();
+            *runwriter = newrunstate;
+        }
+
+
         ctx.print(1, 1, format!("Tetra Early Preview v{}", VERSION));
     }
 }
@@ -166,8 +183,13 @@ impl State {
         let mut ai = systems::MonsterAi {};
         let mut mis = systems::MapIndexingSystem {};
         let mut loot_system = systems::ItemCollectionSystem {};
+        let mut potions = systems::PotionUseSystem {};
+        let mut drop_items = systems::LootSystem {};
+
+        potions.run_now(&self.ecs);
         ai.run_now(&self.ecs);
         mis.run_now(&self.ecs);
+        drop_items.run_now(&self.ecs);
         loot_system.run_now(&self.ecs);
         vis.run_now(&self.ecs);
         melee.run_now(&self.ecs);
@@ -179,12 +201,12 @@ impl State {
 
 #[derive(PartialEq, Copy, Clone)]
 pub enum RunState {
-    // Paused,
-    // Running,
     AwaitingInput,
     PreRun,
     PlayerTurn,
     MonsterTurn,
+    InventoryScreen,
+    DropItemScreen,
 }
 
 fn delete_the_dead(ecs: &mut World) {
@@ -230,6 +252,8 @@ fn player_input(gs: &mut State, ctx: &mut Rltk) -> RunState {
             N => try_move_player(1, 1, &mut gs.ecs),
             B => try_move_player(-1, 1, &mut gs.ecs),
             G => get_item(&mut gs.ecs),
+            I => res = RunState::InventoryScreen,
+            D => res = RunState::DropItemScreen,
             _ => res = RunState::AwaitingInput,
         }
     }

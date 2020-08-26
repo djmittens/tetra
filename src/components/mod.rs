@@ -12,7 +12,7 @@ pub mod gamelog;
 pub mod spawner;
 pub use gamelog::GameLog;
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone)]
 pub struct Position {
     pub x: i32,
     pub y: i32,
@@ -44,7 +44,7 @@ pub struct Item {}
 
 #[derive(Component, Debug)]
 pub struct Potion {
-    heal_amount: i32
+    pub heal_amount: i32
 }
 
 #[derive(Component, Debug)]
@@ -98,4 +98,14 @@ impl SufferDamage {
             store.insert(victim, dmg).expect("Unable to insert damage");
         }
     }
+}
+
+#[derive(Component, Debug)]
+pub struct WantsToDrinkPotion {
+    pub potion: Entity
+}
+
+#[derive(Component, Debug, ConvertSaveload, Clone)]
+pub struct WantsToDropItem {
+    pub item: Entity,
 }

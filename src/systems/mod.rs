@@ -221,3 +221,55 @@ impl<'a> System<'a> for ItemCollectionSystem {
         pickup_items.clear();
     }
 }
+
+
+pub struct PotionUseSystem {}
+
+impl<'a> System<'a> for PotionUseSystem {
+    type SystemData = (
+        ReadExpect<'a, Entity>,
+        WriteExpect<'a, GameLog>,
+        Entities<'a>,
+        WriteStorage<'a, WantsToDrinkPotion>,
+        ReadStorage<'a, Name>,
+        ReadStorage<'a, Potion>,
+        WriteStorage<'a, CombatStats>
+    );
+    fn run(&mut self, (player, mut gamelog, entities, mut drink_intents, names, potions, mut combat_stats): Self::SystemData) {
+        for(entity, intent, stats) in (&entities, &drink_intents, &mut combat_stats).join() {
+            if let Some(potion) = potions.get(intent.potion) {
+                stats.hp = i32::min(stats.max_hp, stats.hp + potion.heal_amount);
+                if entity == *player {
+                    gamelog.entries.push(format!("You drink the {}, healing {} hp", names.get(intent.potion).unwrap().name, potion.heal_amount));
+                }
+                entities.delete(intent.potion).expect("Couldn't delete the potion after drinking");
+            }
+        }
+    }
+}
+
+pub struct LootSystem {}
+impl <'a> System<'a> for LootSystem {
+    type SystemData = (
+        ReadExpect<'a, Entity>,
+        WriteExpect<'a, GameLog>,
+        Entities<'a>,
+        WriteStorage<'a, WantsToDropItem>,
+        ReadStorage<'a, Name>,
+        WriteStorage<'a, Position>,
+        WriteStorage<'a, InBackpack>
+    );
+
+    fn run(&mut self, (player, mut gamelog, entities, mut drops, names, mut positions, mut backpacks): Self::SystemData) {
+        for (entity, drop) in (&entities, &drops).join() {
+            let dropper_pos = positions.get(entity).get_or_insert(&Position{x: 0, y:0}).clone();
+            positions.insert(drop.item,dropper_pos).expect("Unable to inser position");
+            backpacks.remove(drop.item);
+            if entity == *player {
+                gamelog.say(format!("You drop the {}", names.get(drop.item).unwrap().name));
+            }
+        }
+
+        drops.clear();
+    }
+}
