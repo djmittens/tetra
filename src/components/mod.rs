@@ -50,7 +50,7 @@ pub struct Potion {
 #[derive(Component, Debug)]
 pub struct Monster;
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone)]
 pub struct Name {
     pub name: String,
 }

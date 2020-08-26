@@ -80,32 +80,14 @@ pub fn draw_tooltips(ecs: &World, ctx: &mut Rltk) {
 #[derive(PartialEq, Copy, Clone)]
 pub enum ItemMenuResult{Cancel, NoResponse, Selected}
 
-pub fn show_inventory(ecs: &mut World, ctx: &mut Rltk) -> (ItemMenuResult, Option<Entity>) {
-    let player = ecs.fetch::<Entity>();
-    let names = ecs.read_storage::<Name>();
-    let backpack = ecs.read_storage::<InBackpack>();
-    let entities = ecs.entities();
-
-    let inventory = (&backpack, &names).join().filter(|item| item.0.owner == *player);
-    let count = inventory.count();
-
-    //whats this 25 ? the height of the window ?
-
-    let mut equipable: Vec<(Entity, &String)> = Vec::new();
-    for(entity, _pack , name) in (&entities, &backpack, &names).join().filter(|item| item.1.owner == *player) {
-        equipable.push((entity, &name.name))
-    }
-    let options:Vec<_> = equipable.iter().enumerate().map(|(i, (_, name))|{(97 + i as u8, *name)}).collect();
-    let options:&[_] = &options;
-    draw_selection_screen(15, 25, &"Use Item".to_string(), options, ctx);
-    
+pub fn inventory_menu_input(ctx: &mut Rltk, items: Vec<(Name, Entity)>) -> (ItemMenuResult, Option<Entity>) {
     match ctx.key {
         None => (ItemMenuResult::NoResponse, None),
         Some(VirtualKeyCode::Escape) => (ItemMenuResult::Cancel, None),
         Some(key) => {
             let selection = rltk::letter_to_option(key);
-            if selection > -1 && selection < count as i32 {
-                (ItemMenuResult::Selected, Some(equipable[selection as usize].0))
+            if selection > -1 && selection < items.len() as i32 {
+                (ItemMenuResult::Selected, Some(items[selection as usize].1))
             } else{
                 (ItemMenuResult::NoResponse, None)
             }
@@ -113,12 +95,14 @@ pub fn show_inventory(ecs: &mut World, ctx: &mut Rltk) -> (ItemMenuResult, Optio
     }
 }
 
+
 // y = 25
 // x = 15
 
-fn draw_selection_screen(x: i32, y: i32, title: &String,  items: &[(u8, &String)], ctx: &mut Rltk) {
+pub fn draw_inventory_screen(ctx: &mut Rltk, x: i32, y: i32, title: &String,  items: &[&String]) {
     let count = items.len() as i32;
     let mut y = y - (count / 2);
+    let items:Vec<_> = items.iter().enumerate().map(|(i, name)|{(97 + i as u8, name)}).collect();
     ctx.draw_box(x, y - 2, 31, (count + 3) as i32, RGB::named(rltk::WHITE), RGB::named(rltk::BLACK));
     ctx.print_color(x + 3, y - 2, RGB::named(rltk::YELLOW),RGB::named(rltk::BLACK), title);
     ctx.print_color( x + 3, y + count as i32 + 1, RGB::named(rltk::YELLOW),RGB::named(rltk::BLACK), "Press ESC to cancel".to_string());

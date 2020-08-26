@@ -149,7 +149,15 @@ impl GameState for State {
                 newrunstate = RunState::AwaitingInput;
             },
             RunState::InventoryScreen => {
-                let res = gui::show_inventory(&mut self.ecs, ctx);
+                // TODO: probably can refactor this to remove duplication with the drop screen
+                let items = {
+                    let player = *self.ecs.fetch::<Entity>();
+                    inventory_contents(&mut self.ecs, player)
+                };
+                let item_names: Vec<_> = items.iter().map(|(n, _)| &n.name).collect();
+            
+                gui::draw_inventory_screen(ctx, 15, 25, &"Use Item".into(), item_names.as_slice());
+                let res = gui::inventory_menu_input(ctx, items);
                 match res {
                     (gui::ItemMenuResult::Cancel, _) => newrunstate = RunState::AwaitingInput,
                     (gui::ItemMenuResult::NoResponse, _) => {},
@@ -162,6 +170,25 @@ impl GameState for State {
                 }
             },
             RunState::DropItemScreen => {
+                let items = {
+                    let player = *self.ecs.fetch::<Entity>();
+                    inventory_contents(&mut self.ecs, player)
+                };
+
+                let item_names: Vec<_> = items.iter().map(|(n, _)| &n.name).collect();
+            
+                gui::draw_inventory_screen(ctx, 15, 25, &"Drop Item".into(), item_names.as_slice());
+                let res = gui::inventory_menu_input(ctx, items);
+                match res {
+                    (gui::ItemMenuResult::Cancel, _) => newrunstate = RunState::AwaitingInput,
+                    (gui::ItemMenuResult::NoResponse, _) => {},
+                    (gui::ItemMenuResult::Selected, Some(item)) => {
+                        let mut intent = self.ecs.write_storage::<WantsToDropItem>();
+                        intent.insert(*self.ecs.fetch::<Entity>(), WantsToDropItem{item}).expect("Unable to insert intent");
+                        newrunstate = RunState::PlayerTurn;
+                    },
+                    (_, None) => {},
+                }
             },
         }
 
@@ -251,7 +278,7 @@ fn player_input(gs: &mut State, ctx: &mut Rltk) -> RunState {
             U => try_move_player(1, -1, &mut gs.ecs),
             N => try_move_player(1, 1, &mut gs.ecs),
             B => try_move_player(-1, 1, &mut gs.ecs),
-            G => get_item(&mut gs.ecs),
+            G => pickup_item(&mut gs.ecs),
             I => res = RunState::InventoryScreen,
             D => res = RunState::DropItemScreen,
             _ => res = RunState::AwaitingInput,
@@ -305,7 +332,7 @@ fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
     }
 }
 
-fn get_item(ecs: &mut World) {
+fn pickup_item(ecs: &mut World) {
     let player = ecs.fetch::<Entity>();
     let player = *player;
     let entities = ecs.entities();
@@ -328,6 +355,18 @@ fn get_item(ecs: &mut World) {
             pickup.insert(player, WantsToPickupItem{collected_by: player, item}).expect("Could not notify of item pickup");
         }
     }
+}
+
+pub fn inventory_contents<'a>(ecs: &'a mut World, player: Entity) -> Vec<(Name, Entity)> {
+    let names = ecs.read_storage::<Name>();
+    let backpack = ecs.read_storage::<InBackpack>();
+    let entities = ecs.entities();
+
+    let mut items= Vec::new();
+    for(entity, _pack , name) in (&entities, &backpack, &names).join().filter(|item| item.1.owner == player) {
+        items.push((name.clone(), entity))
+    }
+    items
 }
 
 impl util::Rng for rltk::RandomNumberGenerator {
