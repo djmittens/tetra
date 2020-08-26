@@ -10,6 +10,7 @@ pub struct Renderable {
     pub glyph: rltk::FontCharType,
     pub fg: RGB,
     pub bg: RGB,
+    pub order: i32,
 }
 
 impl Algorithm2D for map::TetraMap {

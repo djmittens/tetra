@@ -76,8 +76,6 @@ fn main() -> rltk::RltkError {
             for (_i, room) in map.rooms.iter().enumerate() {
                 if room != res {
                     spawner::spawn_room(&mut gs.ecs, room, spawner::SpawnerSettings::default());
-                    // let (x, y) = room.center();
-                    // spawner::random_monster(&mut gs.ecs, x, y);
                 }
             }
         }
@@ -121,8 +119,10 @@ impl GameState for State {
             let positions = self.ecs.read_storage::<Position>();
             let renderables = self.ecs.read_storage::<draw::Renderable>();
             //TODO only draw when inside of the players viewshed.
+            let mut data: Vec<_> = (&positions, &renderables).join().collect();
+            data.sort_by_key(|(_, k)| k.order);
 
-            for (pos, render) in (&positions, &renderables).join() {
+            for (pos, render) in  data.iter() {
                 ctx.set(pos.x, pos.y, render.fg, render.bg, render.glyph);
             }
         }

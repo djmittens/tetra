@@ -90,6 +90,7 @@ fn monster<S: ToString>(ecs: &mut World, x: i32, y: i32, glyph: char, name: S) {
             glyph: rltk::to_cp437(glyph),
             fg: RGB::named(rltk::RED),
             bg: RGB::named(rltk::BLACK),
+            order: 1,
         })
         .with(BlocksTile {})
         .with(CombatStats {
@@ -108,6 +109,7 @@ pub fn player(ecs: &mut World, player_x: i32, player_y: i32) -> Entity {
             glyph: rltk::to_cp437('@'),
             fg: RGB::named(rltk::YELLOW),
             bg: RGB::named(rltk::BLACK),
+            order: 0,
         })
         .with(Player {
             revealed_tiles: HashSet::new(),
@@ -136,7 +138,8 @@ fn health_potion(ecs: &mut World, x: i32, y: i32) {
         .with(draw::Renderable {
             glyph: rltk::to_cp437('¡'),
             fg: RGB::named(rltk::MAGENTA),
-            bg: RGB::named(rltk::BLACK)
+            bg: RGB::named(rltk::BLACK),
+            order: 2,
         })
         .with(Name{name: "Health Potion".into()})
         .with(Item{})
