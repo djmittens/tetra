@@ -3,7 +3,6 @@ use log::*;
 use rltk::{GameState, Rltk, RltkBuilder, VirtualKeyCode};
 use specs::prelude::*;
 
-
 extern crate env_logger;
 extern crate log;
 extern crate specs;
@@ -120,9 +119,9 @@ impl GameState for State {
             let renderables = self.ecs.read_storage::<draw::Renderable>();
             //TODO only draw when inside of the players viewshed.
             let mut data: Vec<_> = (&positions, &renderables).join().collect();
-            data.sort_by_key(|(_, k)| k.order);
+            data.sort_by_key(|(_, k)| -k.order);
 
-            for (pos, render) in  data.iter() {
+            for (pos, render) in data.iter() {
                 ctx.set(pos.x, pos.y, render.fg, render.bg, render.glyph);
             }
         }
@@ -147,56 +146,43 @@ impl GameState for State {
             RunState::MonsterTurn => {
                 self.run_systems();
                 newrunstate = RunState::AwaitingInput;
-            },
+            }
             RunState::InventoryScreen => {
-                // TODO: probably can refactor this to remove duplication with the drop screen
-                let items = {
-                    let player = *self.ecs.fetch::<Entity>();
-                    inventory_contents(&mut self.ecs, player)
-                };
-                let item_names: Vec<_> = items.iter().map(|(n, _)| &n.name).collect();
-            
-                gui::draw_inventory_screen(ctx, 15, 25, &"Use Item".into(), item_names.as_slice());
-                let res = gui::inventory_menu_input(ctx, items);
-                match res {
-                    (gui::ItemMenuResult::Cancel, _) => newrunstate = RunState::AwaitingInput,
-                    (gui::ItemMenuResult::NoResponse, _) => {},
-                    (gui::ItemMenuResult::Selected, Some(item)) => {
+                match display_inventory_selection(ctx, &mut self.ecs, &"Use Item".into()) {
+                    Some((x, Some(potion))) => {
                         let mut intent = self.ecs.write_storage::<WantsToDrinkPotion>();
-                        intent.insert(*self.ecs.fetch::<Entity>(), WantsToDrinkPotion{potion: item}).expect("Unable to insert intent");
-                        newrunstate = RunState::PlayerTurn;
-                    },
-                    (_, None) => {},
+                        intent
+                            .insert(*self.ecs.fetch::<Entity>(), WantsToDrinkPotion { potion })
+                            .expect("Unable to insert intent");
+                        newrunstate = x;
+                    }
+                    Some((x, None)) => {
+                        newrunstate = x;
+                    }
+                    None => {}
                 }
-            },
+            }
             RunState::DropItemScreen => {
-                let items = {
-                    let player = *self.ecs.fetch::<Entity>();
-                    inventory_contents(&mut self.ecs, player)
-                };
-
-                let item_names: Vec<_> = items.iter().map(|(n, _)| &n.name).collect();
-            
-                gui::draw_inventory_screen(ctx, 15, 25, &"Drop Item".into(), item_names.as_slice());
-                let res = gui::inventory_menu_input(ctx, items);
-                match res {
-                    (gui::ItemMenuResult::Cancel, _) => newrunstate = RunState::AwaitingInput,
-                    (gui::ItemMenuResult::NoResponse, _) => {},
-                    (gui::ItemMenuResult::Selected, Some(item)) => {
+                match display_inventory_selection(ctx, &mut self.ecs, &"Drop Item".into()) {
+                    Some((x, Some(item))) => {
                         let mut intent = self.ecs.write_storage::<WantsToDropItem>();
-                        intent.insert(*self.ecs.fetch::<Entity>(), WantsToDropItem{item}).expect("Unable to insert intent");
-                        newrunstate = RunState::PlayerTurn;
-                    },
-                    (_, None) => {},
+                        intent
+                            .insert(*self.ecs.fetch::<Entity>(), WantsToDropItem { item })
+                            .expect("Unable to insert intent");
+                        newrunstate = x;
+                    }
+                    Some((x, None)) => {
+                        newrunstate = x;
+                    }
+                    None => {}
                 }
-            },
+            }
         }
 
         {
             let mut runwriter = self.ecs.write_resource::<RunState>();
             *runwriter = newrunstate;
         }
-
 
         ctx.print(1, 1, format!("Tetra Early Preview v{}", VERSION));
     }
@@ -297,7 +283,6 @@ fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
     let map = ecs.fetch::<map::TetraMap>();
     let entities = ecs.entities();
 
-
     fn clamp(m: i32, v: i32) -> i32 {
         use std::cmp::{max, min};
         min(m, max(0, v))
@@ -340,7 +325,7 @@ fn pickup_item(ecs: &mut World) {
     let positions = ecs.read_storage::<Position>();
     let mut gamelog = ecs.fetch_mut::<GameLog>();
 
-    let mut target_item : Option<Entity> = None;
+    let mut target_item: Option<Entity> = None;
     for (item_entity, _item, position) in (&entities, &items, &positions).join() {
         let p_pos = positions.get(player).unwrap();
         if position.x == p_pos.x && position.y == p_pos.y {
@@ -349,21 +334,66 @@ fn pickup_item(ecs: &mut World) {
     }
 
     match target_item {
-        None => gamelog.entries.push("There is nothing here to pickup.".to_string()),
+        None => gamelog
+            .entries
+            .push("There is nothing here to pickup.".to_string()),
         Some(item) => {
             let mut pickup = ecs.write_storage::<WantsToPickupItem>();
-            pickup.insert(player, WantsToPickupItem{collected_by: player, item}).expect("Could not notify of item pickup");
+            pickup
+                .insert(
+                    player,
+                    WantsToPickupItem {
+                        collected_by: player,
+                        item,
+                    },
+                )
+                .expect("Could not notify of item pickup");
         }
     }
 }
 
-pub fn inventory_contents<'a>(ecs: &'a mut World, player: Entity) -> Vec<(Name, Entity)> {
+fn display_inventory_selection(
+    ctx: &mut Rltk,
+    ecs: &mut World,
+    title: &String,
+) -> Option<(RunState, Option<Entity>)> {
+    let items = {
+        let player = *ecs.fetch::<Entity>();
+        inventory_contents(ecs, player)
+    };
+
+    //TODO: i definitely should not hard code the location of this.
+    gui::draw_inventory_screen(
+        ctx,
+        15,
+        25,
+        title,
+        items
+            .iter()
+            .map(|(n, _)| &n.name)
+            .collect::<Vec<_>>()
+            .as_slice(),
+    );
+
+    match gui::inventory_menu_input(ctx, items) {
+        (gui::ItemMenuResult::Cancel, _) => Some((RunState::AwaitingInput, None)),
+        (gui::ItemMenuResult::NoResponse, _) => None,
+        (gui::ItemMenuResult::Selected, Some(item)) => Some((RunState::PlayerTurn, Some(item))),
+        (_, None) => None,
+    }
+}
+
+
+fn inventory_contents<'a>(ecs: &'a mut World, player: Entity) -> Vec<(Name, Entity)> {
     let names = ecs.read_storage::<Name>();
     let backpack = ecs.read_storage::<InBackpack>();
     let entities = ecs.entities();
 
-    let mut items= Vec::new();
-    for(entity, _pack , name) in (&entities, &backpack, &names).join().filter(|item| item.1.owner == player) {
+    let mut items = Vec::new();
+    for (entity, _pack, name) in (&entities, &backpack, &names)
+        .join()
+        .filter(|item| item.1.owner == player)
+    {
         items.push((name.clone(), entity))
     }
     items

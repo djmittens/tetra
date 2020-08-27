@@ -235,7 +235,7 @@ impl<'a> System<'a> for PotionUseSystem {
         ReadStorage<'a, Potion>,
         WriteStorage<'a, CombatStats>
     );
-    fn run(&mut self, (player, mut gamelog, entities, mut drink_intents, names, potions, mut combat_stats): Self::SystemData) {
+    fn run(&mut self, (player, mut gamelog, entities, drink_intents, names, potions, mut combat_stats): Self::SystemData) {
         for(entity, intent, stats) in (&entities, &drink_intents, &mut combat_stats).join() {
             if let Some(potion) = potions.get(intent.potion) {
                 stats.hp = i32::min(stats.max_hp, stats.hp + potion.heal_amount);
