@@ -223,26 +223,29 @@ impl<'a> System<'a> for ItemCollectionSystem {
 }
 
 
-pub struct PotionUseSystem {}
+pub struct ItemUseSystem {}
 
-impl<'a> System<'a> for PotionUseSystem {
+impl<'a> System<'a> for ItemUseSystem {
     type SystemData = (
         ReadExpect<'a, Entity>,
         WriteExpect<'a, GameLog>,
         Entities<'a>,
-        WriteStorage<'a, WantsToDrinkPotion>,
+        WriteStorage<'a, WantsToUseItem>,
         ReadStorage<'a, Name>,
-        ReadStorage<'a, Potion>,
+        ReadStorage<'a, ProvidesHealing>,
+        ReadStorage<'a, Consumable>,
         WriteStorage<'a, CombatStats>
     );
-    fn run(&mut self, (player, mut gamelog, entities, drink_intents, names, potions, mut combat_stats): Self::SystemData) {
-        for(entity, intent, stats) in (&entities, &drink_intents, &mut combat_stats).join() {
-            if let Some(potion) = potions.get(intent.potion) {
+    fn run(&mut self, (player, mut gamelog, entities, use_intents, names, potions, consumables, mut combat_stats): Self::SystemData) {
+        for(entity, intent, stats) in (&entities, &use_intents, &mut combat_stats).join() {
+            if let Some(potion) = potions.get(intent.item) {
                 stats.hp = i32::min(stats.max_hp, stats.hp + potion.heal_amount);
                 if entity == *player {
-                    gamelog.entries.push(format!("You drink the {}, healing {} hp", names.get(intent.potion).unwrap().name, potion.heal_amount));
+                    gamelog.entries.push(format!("You drink the {}, healing {} hp", names.get(intent.item).unwrap().name, potion.heal_amount));
                 }
-                entities.delete(intent.potion).expect("Couldn't delete the potion after drinking");
+                if consumables.contains(intent.item) {
+                    entities.delete(intent.item).expect("Couldn't delete the item after use");
+                }
             }
         }
     }

@@ -34,11 +34,14 @@ fn main() -> rltk::RltkError {
     gs.ecs.register::<WantsToMelee>();
     gs.ecs.register::<WantsToPickupItem>();
     gs.ecs.register::<SufferDamage>();
-    gs.ecs.register::<Potion>();
+    gs.ecs.register::<ProvidesHealing>();
     gs.ecs.register::<Item>();
     gs.ecs.register::<InBackpack>();
-    gs.ecs.register::<WantsToDrinkPotion>();
+    gs.ecs.register::<Consumable>();
+    gs.ecs.register::<WantsToUseItem>();
     gs.ecs.register::<WantsToDropItem>();
+    gs.ecs.register::<InflictsDamage>();
+    gs.ecs.register::<Ranged>();
 
     {
         let rng: util::RngResource = Box::new(rltk::RandomNumberGenerator::new());
@@ -149,12 +152,18 @@ impl GameState for State {
             }
             RunState::InventoryScreen => {
                 match display_inventory_selection(ctx, &mut self.ecs, &"Use Item".into()) {
-                    Some((x, Some(potion))) => {
-                        let mut intent = self.ecs.write_storage::<WantsToDrinkPotion>();
-                        intent
-                            .insert(*self.ecs.fetch::<Entity>(), WantsToDrinkPotion { potion })
-                            .expect("Unable to insert intent");
-                        newrunstate = x;
+                    Some((x, Some(item))) => {
+                        let mut intent = self.ecs.write_storage::<WantsToUseItem>();
+                        let ir = self.ecs.read_storage::<Ranged>();
+                        let is_item_ranged = ir.get(item);
+                        if let Some(is_item_ranged) = is_item_ranged {
+                            newrunstate = RunState::TargettingInput{range: is_item_ranged.range, item:  item};
+                        } else {
+                            intent
+                                .insert(*self.ecs.fetch::<Entity>(), WantsToUseItem { item, target: None })
+                                .expect("Unable to insert intent");
+                            newrunstate = x;
+                        }
                     }
                     Some((x, None)) => {
                         newrunstate = x;
@@ -177,6 +186,18 @@ impl GameState for State {
                     None => {}
                 }
             }
+            RunState::TargettingInput{range, item} =>{
+                let target = gui::ranged_target(&mut self.ecs, ctx, range);
+                match target {
+                    gui::ItemMenuResult::Cancel => {newrunstate = RunState::AwaitingInput}
+                    gui::ItemMenuResult::NoResponse => {}
+                    gui::ItemMenuResult::Selected{item: i} => {
+                        let mut intent = self.ecs.write_storage::<WantsToUseItem>();
+                        intent.insert(*self.ecs.fetch::<Entity>(), WantsToUseItem{item, target: Some(i)}).expect("cant insert intent");
+                        newrunstate = RunState::PlayerTurn;
+                    }
+                }
+            }
         }
 
         {
@@ -196,7 +217,7 @@ impl State {
         let mut ai = systems::MonsterAi {};
         let mut mis = systems::MapIndexingSystem {};
         let mut loot_system = systems::ItemCollectionSystem {};
-        let mut potions = systems::PotionUseSystem {};
+        let mut potions = systems::ItemUseSystem {};
         let mut drop_items = systems::LootSystem {};
 
         potions.run_now(&self.ecs);
@@ -220,6 +241,9 @@ pub enum RunState {
     MonsterTurn,
     InventoryScreen,
     DropItemScreen,
+    TargettingInput {
+        range: i32, item: Entity
+    }
 }
 
 fn delete_the_dead(ecs: &mut World) {
@@ -376,10 +400,9 @@ fn display_inventory_selection(
     );
 
     match gui::inventory_menu_input(ctx, items) {
-        (gui::ItemMenuResult::Cancel, _) => Some((RunState::AwaitingInput, None)),
-        (gui::ItemMenuResult::NoResponse, _) => None,
-        (gui::ItemMenuResult::Selected, Some(item)) => Some((RunState::PlayerTurn, Some(item))),
-        (_, None) => None,
+        gui::ItemMenuResult::Cancel => Some((RunState::AwaitingInput, None)),
+        gui::ItemMenuResult::NoResponse => None,
+        gui::ItemMenuResult::Selected{item} => Some((RunState::PlayerTurn, Some(item))),
     }
 }
 
