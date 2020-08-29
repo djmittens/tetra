@@ -228,21 +228,42 @@ pub struct ItemUseSystem {}
 impl<'a> System<'a> for ItemUseSystem {
     type SystemData = (
         ReadExpect<'a, Entity>,
+        ReadExpect<'a, map::TetraMap>,
         WriteExpect<'a, GameLog>,
         Entities<'a>,
         WriteStorage<'a, WantsToUseItem>,
         ReadStorage<'a, Name>,
         ReadStorage<'a, ProvidesHealing>,
+        ReadStorage<'a, InflictsDamage>,
+        WriteStorage<'a, SufferDamage>,
         ReadStorage<'a, Consumable>,
         WriteStorage<'a, CombatStats>
     );
-    fn run(&mut self, (player, mut gamelog, entities, use_intents, names, potions, consumables, mut combat_stats): Self::SystemData) {
+    fn run(&mut self, (player, map, mut gamelog, entities, use_intents, names, potions, inflict_damage, mut suffer_damage, consumables, mut combat_stats): Self::SystemData) {
         for(entity, intent, stats) in (&entities, &use_intents, &mut combat_stats).join() {
+            let mut use_item = false;
             if let Some(potion) = potions.get(intent.item) {
                 stats.hp = i32::min(stats.max_hp, stats.hp + potion.heal_amount);
                 if entity == *player {
                     gamelog.entries.push(format!("You drink the {}, healing {} hp", names.get(intent.item).unwrap().name, potion.heal_amount));
+                    use_item = true;
                 }
+            }
+
+            if let Some(damage) = inflict_damage.get(intent.item) {
+                let target_point = intent.target.unwrap();
+                for mob in map.entities.get(target_point.0, target_point.1) {
+                    SufferDamage::new_damage(&mut suffer_damage, *mob, damage.damage);
+                    if entity == *player {
+                        let mob_name = names.get(*mob).unwrap();
+                        let item_name = names.get(intent.item).unwrap();
+                        gamelog.entries.push(format!("You use {} on {}, inflicting {} hp.", item_name.name, mob_name.name, damage.damage));
+                        use_item = true;
+                    }
+                }
+            }
+
+            if use_item {
                 if consumables.contains(intent.item) {
                     entities.delete(intent.item).expect("Couldn't delete the item after use");
                 }

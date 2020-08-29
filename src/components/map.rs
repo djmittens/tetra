@@ -25,6 +25,10 @@ impl TetraMap {
         (idx as i32 % self.buffer.width,  idx as i32 / self.buffer.width)
     }
 
+    pub fn xy_idx(&self, x: i32, y: i32)-> usize {
+        self.buffer.xy_idx(x, y)
+    }
+
     pub fn width(&self) -> i32 {
         self.buffer.width
     }
