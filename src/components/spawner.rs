@@ -146,12 +146,13 @@ fn monster<S: ToString>(ecs: &mut World, x: i32, y: i32, glyph: char, name: S) {
 fn random_item(ecs: &mut World, x: i32, y: i32) {
     let roll: i32 = {
         let mut rng = ecs.write_resource::<RngResource>();
-        rng.between(0, 3)
+        rng.between(0, 4)
     };
 
     match roll {
         1 => {health_potion(ecs, x, y)}
         2 => {fireball_scroll(ecs, x, y)}
+        3 => {confusion_scroll(ecs, x, y)}
         _ => {magic_missile_scroll(ecs, x, y)}
     }
 }
@@ -212,6 +213,26 @@ fn magic_missile_scroll(ecs: &mut World, x: i32, y: i32) {
         .with(InflictsDamage { damage: 8 })
         .build();
 }
+
+fn confusion_scroll(ecs: &mut World, x: i32, y: i32) {
+    ecs.create_entity()
+        .with(Position { x, y })
+        .with(draw::Renderable {
+            glyph: rltk::to_cp437(')'),
+            fg: RGB::named(rltk::BISQUE),
+            bg: RGB::named(rltk::BLACK),
+            order: 2,
+        })
+        .with(Name {
+            name: "Confusion Scroll".into(),
+        })
+        .with(Item {})
+        .with(Consumable {})
+        .with(Ranged{ range: 6})
+        .with(Confusion { turns: 4 })
+        .build();
+}
+
 
 pub struct SpawnerSettings {
     pub max_monsters: i32,

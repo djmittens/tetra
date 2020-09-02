@@ -38,6 +38,7 @@ impl<'a> System<'a> for MonsterAi {
         Entities<'a>,
         WriteStorage<'a, Viewshed>,
         ReadStorage<'a, Monster>,
+        WriteStorage<'a, Confusion>,
         WriteStorage<'a, Position>,
         WriteStorage<'a, WantsToMelee>,
     );
@@ -51,6 +52,7 @@ impl<'a> System<'a> for MonsterAi {
             entities,
             mut viewshed,
             monster,
+            mut confused,
             mut positions,
             mut wants_to_melee,
         ): Self::SystemData,
@@ -69,35 +71,42 @@ impl<'a> System<'a> for MonsterAi {
         for (ent, viewshed, _monster, pos) in
             (&entities, &mut viewshed, &monster, &mut positions).join()
         {
-            let idx = map.nav_buffer.xy_idx(px, py);
-
-            if viewshed.visible_tiles.contains(&idx) {
-                let path = a_star_search(
-                    // map.nav_buffer.xy_idx(pos.x, pos.y),
-                    map.nav_buffer.xy_idx(pos.x, pos.y),
-                    map.nav_buffer.xy_idx(px, py),
-                    // *target,
-                    &mut *map,
-                );
-                if path.success && path.steps.len() > 2 {
-                    pos.x = path.steps[1] as i32 % map.width();
-                    pos.y = path.steps[1] as i32 / map.width();
-                    viewshed.dirty = true;
+            if let Some(i_am_confused) = confused.get_mut(ent) {
+                i_am_confused.turns -= 1;
+                if i_am_confused.turns < 1 {
+                    confused.remove(ent);
                 }
-            }
+            } else {
+                let idx = map.nav_buffer.xy_idx(px, py);
 
-            let distance = rltk::DistanceAlg::Pythagoras
-                .distance2d(rltk::Point::new(pos.x, pos.y), rltk::Point::new(px, py));
+                if viewshed.visible_tiles.contains(&idx) {
+                    let path = a_star_search(
+                        // map.nav_buffer.xy_idx(pos.x, pos.y),
+                        map.nav_buffer.xy_idx(pos.x, pos.y),
+                        map.nav_buffer.xy_idx(px, py),
+                        // *target,
+                        &mut *map,
+                    );
+                    if path.success && path.steps.len() > 2 {
+                        pos.x = path.steps[1] as i32 % map.width();
+                        pos.y = path.steps[1] as i32 / map.width();
+                        viewshed.dirty = true;
+                    }
+                }
 
-            if distance < 1.5 {
-                wants_to_melee
-                    .insert(
-                        ent,
-                        WantsToMelee {
-                            target: player_entity,
-                        },
-                    )
-                    .expect("Unable to insert attack");
+                let distance = rltk::DistanceAlg::Pythagoras
+                    .distance2d(rltk::Point::new(pos.x, pos.y), rltk::Point::new(px, py));
+
+                if distance < 1.5 {
+                    wants_to_melee
+                        .insert(
+                            ent,
+                            WantsToMelee {
+                                target: player_entity,
+                            },
+                        )
+                        .expect("Unable to insert attack");
+                }
             }
         }
     }
@@ -237,6 +246,7 @@ impl<'a> System<'a> for ItemUseSystem {
         WriteStorage<'a, SufferDamage>,
         ReadStorage<'a, AreaOfEffect>,
         ReadStorage<'a, Consumable>,
+        WriteStorage<'a, Confusion>,
         WriteStorage<'a, CombatStats>,
     );
     fn run(
@@ -253,6 +263,7 @@ impl<'a> System<'a> for ItemUseSystem {
             mut suffer_damage,
             aoes,
             consumables,
+            mut confused,
             mut combat_stats,
         ): Self::SystemData,
     ) {
@@ -316,6 +327,33 @@ impl<'a> System<'a> for ItemUseSystem {
                     }
                 }
             }
+
+            let k: Vec<_> = {
+                confused
+                    .get(intent.item)
+                    .iter()
+                    .cycle()
+                    .zip(targets.iter())
+                    .map(|(k, mob)| {
+                        use_item = true;
+                        if entity == *player {
+                            let mob_name = names.get(*mob).unwrap();
+                            let item_name = names.get(intent.item).unwrap();
+                            gamelog.say(format!(
+                                "You use {} on {}, confusing them.",
+                                item_name.name, mob_name.name
+                            ));
+                        }
+                        (k.turns, mob)
+                    })
+                    .collect()
+            };
+
+            k.iter().for_each(|(x, y)| {
+                confused
+                    .insert(**y, Confusion { turns: *x })
+                    .expect("Couldnt insert confusion intent");
+            });
 
             if use_item {
                 if consumables.contains(intent.item) {

@@ -42,6 +42,7 @@ fn main() -> rltk::RltkError {
     gs.ecs.register::<WantsToDropItem>();
     gs.ecs.register::<InflictsDamage>();
     gs.ecs.register::<AreaOfEffect>();
+    gs.ecs.register::<Confusion>();
     gs.ecs.register::<Ranged>();
 
     {
